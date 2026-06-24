@@ -1,14 +1,13 @@
 // ═══════════════════════════════════════════════════════
-//  Primary source:  football-data.org  (standings, fixtures, scorers)
-//  Stats source:    api-football (match stats, player stats, lineups)
+//  Primary:  football-data.org  (standings, fixtures, scorers)
+//  Stats:    api-football        (match stats, player stats)
 // ═══════════════════════════════════════════════════════
 
 const FD_KEY  = process.env.FOOTBALL_DATA_API_KEY;
 const AF_KEY  = process.env.API_FOOTBALL_KEY;
 const FD_BASE = 'https://api.football-data.org/v4';
 const AF_BASE = 'https://v3.football.api-sports.io';
-const WC_LEAGUE_AF = 1;     // API-Football WC league id
-const WC_SEASON_AF = 2026;
+const WC_AF   = { league: 1, season: 2026 };
 
 // ── fetch helpers ────────────────────────────────────────
 async function fd(path) {
@@ -24,76 +23,71 @@ async function af(path) {
     headers: { 'x-apisports-key': AF_KEY },
   });
   if (!r.ok) throw new Error(`AF ${path} → ${r.status}: ${await r.text()}`);
-  const data = await r.json();
-  if (data.errors && Object.keys(data.errors).length > 0) {
-    throw new Error(`AF error: ${JSON.stringify(data.errors)}`);
-  }
-  return data;
+  const d = await r.json();
+  if (d.errors && Object.keys(d.errors).length) throw new Error(JSON.stringify(d.errors));
+  return d;
 }
 
-// ── in-memory fixture ID bridge ──────────────────────────
-// Maps football-data fixture id → api-football fixture id
-// Populated lazily when match stats are first requested
-let afFixtureCache = null;   // { dateTeamKey: afFixtureId }
-let afFixtureTTL   = 0;
-
-async function getAFFixtures() {
-  if (afFixtureCache && Date.now() < afFixtureTTL) return afFixtureCache;
-  const data = await af(`/fixtures?league=${WC_LEAGUE_AF}&season=${WC_SEASON_AF}`);
-  const map = {};
-  (data.response || []).forEach(f => {
-    const date  = f.fixture.date?.slice(0, 10) ?? '';          // YYYY-MM-DD
-    const home  = normalise(f.teams.home.name);
-    const away  = normalise(f.teams.away.name);
-    map[`${date}|${home}|${away}`] = f.fixture.id;
-    map[`${date}|${away}|${home}`] = f.fixture.id;             // both directions
-  });
-  afFixtureCache = map;
-  afFixtureTTL   = Date.now() + 6 * 3600 * 1000;              // refresh every 6 h
-  return map;
+// ── name normalisation for fuzzy team matching ───────────
+const NAME_MAP = {
+  'korea republic':    'south korea',
+  'ir iran':           'iran',
+  'côte d\'ivoire':    'ivory coast',
+  "cote d'ivoire":     'ivory coast',
+  'congo dr':          'dr congo',
+  'cape verde':        'cape verde islands',
+  'czechia':           'czech republic',
+  'türkiye':           'turkey',
+};
+function norm(s = '') {
+  let n = s.toLowerCase().replace(/\s+/g, ' ').trim();
+  return NAME_MAP[n] || n;
 }
 
-function normalise(name = '') {
-  return name.toLowerCase()
-    .replace(/\s+/g, ' ')
-    .replace('korea republic', 'south korea')
-    .replace('ir iran', 'iran')
-    .replace('côte d\'ivoire', 'ivory coast')
-    .replace('cote d\'ivoire', 'ivory coast')
-    .replace('congo dr', 'dr congo')
-    .replace('cape verde', 'cape verde islands')
-    .trim();
+// ── scorer name fuzzy match (handles L. Messi ↔ Lionel Messi) ──
+function nameMatch(apiName = '', listName = '') {
+  const a = apiName.toLowerCase();
+  const b = listName.toLowerCase();
+  if (a === b) return true;
+  // "L. Messi" → last name "messi" matches "lionel messi"
+  const parts = b.split(' ');
+  const last = parts[parts.length - 1];
+  const first = parts[0];
+  if (last.length > 2 && a.includes(last)) return true;
+  // first initial match: "k. mbappé" ↔ "kylian mbappé"
+  const initials = a.match(/^([a-z])\.\s/);
+  if (initials && b.startsWith(initials[1]) && a.includes(last)) return true;
+  return false;
 }
 
-// ── all-time data ────────────────────────────────────────
-const ALLTIME_BASE = {
-  'Lionel Messi':     { pre: 13, wiki: 'Lionel_Messi' },
-  'Kylian Mbappé':   { pre: 12, wiki: 'Kylian_Mbappé' },
-  'Cristiano Ronaldo':{ pre: 8,  wiki: 'Cristiano_Ronaldo' },
-  'Neymar Jr':        { pre: 6,  wiki: 'Neymar' },
+// ── all-time data ─────────────────────────────────────────
+// PRE-2026 goals for active players (historical baseline, never changes)
+const PRE2026 = {
+  'Lionel Messi':      13,
+  'Kylian Mbappé':    12,
+  'Cristiano Ronaldo': 8,
+  'Neymar Jr':         6,
 };
 
-const ALLTIME_STATIC = [
-  { player:'Miroslav Klose',    country:'Germany',   flag:'🇩🇪', goals:16, years:'2002–2014', wiki:'Miroslav_Klose',               active:false },
-  { player:'Ronaldo Nazário',   country:'Brazil',    flag:'🇧🇷', goals:15, years:'1994–2006', wiki:'Ronaldo_(Brazilian_footballer)', active:false },
-  { player:'Gerd Müller',       country:'Germany',   flag:'🇩🇪', goals:14, years:'1970–1974', wiki:'Gerd_Müller',                   active:false },
-  { player:'Just Fontaine',     country:'France',    flag:'🇫🇷', goals:13, years:'1958',      wiki:'Just_Fontaine',                 active:false },
-  { player:'Lionel Messi',      country:'Argentina', flag:'🇦🇷', goals:13, years:'2006–',     wiki:'Lionel_Messi',                  active:true  },
-  { player:'Pelé',              country:'Brazil',    flag:'🇧🇷', goals:12, years:'1958–1970', wiki:'Pelé',                          active:false },
-  { player:'Kylian Mbappé',    country:'France',    flag:'🇫🇷', goals:12, years:'2018–',     wiki:'Kylian_Mbappé',                active:true  },
-  { player:'Sándor Kocsis',     country:'Hungary',   flag:'🇭🇺', goals:11, years:'1954',      wiki:'Sándor_Kocsis',                 active:false },
-  { player:'Jürgen Klinsmann',  country:'Germany',   flag:'🇩🇪', goals:11, years:'1990–1998', wiki:'Jürgen_Klinsmann',              active:false },
-  { player:'Thomas Müller',     country:'Germany',   flag:'🇩🇪', goals:10, years:'2010–2018', wiki:'Thomas_Müller',                 active:false },
-  { player:'Teófilo Cubillas',  country:'Peru',      flag:'🇵🇪', goals:10, years:'1970–1978', wiki:'Teófilo_Cubillas',              active:false },
-  { player:'Grzegorz Lato',     country:'Poland',    flag:'🇵🇱', goals:10, years:'1974–1982', wiki:'Grzegorz_Lato',                 active:false },
-  { player:'Gary Lineker',      country:'England',   flag:'🏴󠁧󠁢󠁥󠁮󠁧󠁿', goals:10, years:'1986–1990', wiki:'Gary_Lineker',                 active:false },
-  { player:'Gabriel Batistuta', country:'Argentina', flag:'🇦🇷', goals:10, years:'1994–2002', wiki:'Gabriel_Batistuta',             active:false },
-  { player:'Cristiano Ronaldo', country:'Portugal',  flag:'🇵🇹', goals:8,  years:'2006–',     wiki:'Cristiano_Ronaldo',             active:true  },
+const ALLTIME = [
+  { player:'Miroslav Klose',    country:'Germany',   flag:'🇩🇪', pre:16, years:'2002–2014', wiki:'Miroslav_Klose',               active:false },
+  { player:'Ronaldo Nazário',   country:'Brazil',    flag:'🇧🇷', pre:15, years:'1994–2006', wiki:'Ronaldo_(Brazilian_footballer)', active:false },
+  { player:'Gerd Müller',       country:'Germany',   flag:'🇩🇪', pre:14, years:'1970–1974', wiki:'Gerd_Müller',                   active:false },
+  { player:'Just Fontaine',     country:'France',    flag:'🇫🇷', pre:13, years:'1958',      wiki:'Just_Fontaine',                 active:false },
+  { player:'Lionel Messi',      country:'Argentina', flag:'🇦🇷', pre:13, years:'2006–',     wiki:'Lionel_Messi',                  active:true  },
+  { player:'Pelé',              country:'Brazil',    flag:'🇧🇷', pre:12, years:'1958–1970', wiki:'Pelé',                          active:false },
+  { player:'Kylian Mbappé',    country:'France',    flag:'🇫🇷', pre:12, years:'2018–',     wiki:'Kylian_Mbappé',                active:true  },
+  { player:'Sándor Kocsis',     country:'Hungary',   flag:'🇭🇺', pre:11, years:'1954',      wiki:'Sándor_Kocsis',                 active:false },
+  { player:'Jürgen Klinsmann',  country:'Germany',   flag:'🇩🇪', pre:11, years:'1990–1998', wiki:'Jürgen_Klinsmann',              active:false },
+  { player:'Thomas Müller',     country:'Germany',   flag:'🇩🇪', pre:10, years:'2010–2018', wiki:'Thomas_Müller',                 active:false },
+  { player:'Teófilo Cubillas',  country:'Peru',      flag:'🇵🇪', pre:10, years:'1970–1978', wiki:'Teófilo_Cubillas',              active:false },
+  { player:'Grzegorz Lato',     country:'Poland',    flag:'🇵🇱', pre:10, years:'1974–1982', wiki:'Grzegorz_Lato',                 active:false },
+  { player:'Gary Lineker',      country:'England',   flag:'🏴󠁧󠁢󠁥󠁮󠁧󠁿', pre:10, years:'1986–1990', wiki:'Gary_Lineker',                 active:false },
+  { player:'Gabriel Batistuta', country:'Argentina', flag:'🇦🇷', pre:10, years:'1994–2002', wiki:'Gabriel_Batistuta',             active:false },
+  { player:'Cristiano Ronaldo', country:'Portugal',  flag:'🇵🇹', pre:8,  years:'2006–',     wiki:'Cristiano_Ronaldo',             active:true  },
 ];
 
-// ═══════════════════════════════════════════════════════
-//  MAIN HANDLER
-// ═══════════════════════════════════════════════════════
+// ══ MAIN HANDLER ════════════════════════════════════════
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin',  '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
@@ -103,101 +97,128 @@ export default async function handler(req, res) {
 
   try {
 
-    // ── 1. MATCH DETAIL (basic: from football-data.org)
+    // ── 1. MATCH DETAIL (football-data.org)
     if (type === 'match' && matchId) {
       const data = await fd(`/matches/${matchId}`);
       res.setHeader('Cache-Control', 's-maxage=30, stale-while-revalidate=60');
       return res.status(200).json(data);
     }
 
-    // ── 2. MATCH STATS (rich: from api-football, bridged by date+teams)
+    // ── 2. MATCH STATS — FAST PATH
+    // Strategy: search by date only (1 AF request) → find fixture by team name fuzzy match
+    // Then fetch stats + players in parallel (2 more requests, total: 3 AF calls)
     if (type === 'matchstats') {
-      // Require date (YYYY-MM-DD), home team name, away team name
       if (!date || !home || !away) {
         return res.status(400).json({ error: 'date, home, away required' });
       }
 
-      const map = await getAFFixtures();
-      const key1 = `${date}|${normalise(home)}|${normalise(away)}`;
-      const key2 = `${date}|${normalise(away)}|${normalise(home)}`;
-      const afId  = map[key1] || map[key2];
+      // Step A: find the AF fixture ID by searching that date (1 request)
+      const dayData = await af(
+        `/fixtures?league=${WC_AF.league}&season=${WC_AF.season}&date=${date}`
+      );
 
-      if (!afId) {
-        return res.status(200).json({ found: false, message: 'Match not found in API-Football index yet' });
+      const fixtures = dayData.response || [];
+      const normHome = norm(home);
+      const normAway = norm(away);
+
+      const match = fixtures.find(f => {
+        const fh = norm(f.teams.home.name);
+        const fa = norm(f.teams.away.name);
+        return (fh === normHome && fa === normAway) ||
+               (fh === normAway && fa === normHome) ||
+               f.teams.home.name.toLowerCase().includes(normHome.split(' ')[0]) ||
+               f.teams.away.name.toLowerCase().includes(normAway.split(' ')[0]);
+      });
+
+      if (!match) {
+        return res.status(200).json({ found: false, message: 'Match not in API-Football yet', fixtures: fixtures.map(f=>f.teams.home.name+'v'+f.teams.away.name) });
       }
 
-      // Fetch stats + players in parallel — each costs 1 request
-      const [statsData, playersData, eventsData] = await Promise.allSettled([
+      const afId = match.fixture.id;
+      const isLive = ['1H','HT','2H','ET','BT','P'].includes(match.fixture.status.short);
+
+      // Step B: fetch stats + players in parallel (2 requests simultaneously)
+      const [statsRes, playersRes] = await Promise.allSettled([
         af(`/fixtures/statistics?fixture=${afId}`),
         af(`/fixtures/players?fixture=${afId}`),
-        af(`/fixtures?id=${afId}`),
       ]);
 
-      const stats   = statsData.status   === 'fulfilled' ? statsData.value.response   : [];
-      const players = playersData.status === 'fulfilled' ? playersData.value.response : [];
-      const events  = eventsData.status  === 'fulfilled' ? eventsData.value.response?.[0] : null;
+      const stats   = statsRes.status   === 'fulfilled' ? statsRes.value.response   : [];
+      const players = playersRes.status === 'fulfilled' ? playersRes.value.response : [];
 
-      // Cache finished matches for 2 h, live for 60 s
-      const isLive = events?.fixture?.status?.short &&
-        ['1H','HT','2H','ET','BT','P'].includes(events.fixture.status.short);
       res.setHeader('Cache-Control', isLive
-        ? 's-maxage=60, stale-while-revalidate=90'
+        ? 's-maxage=60,  stale-while-revalidate=90'
         : 's-maxage=7200, stale-while-revalidate=14400');
 
-      return res.status(200).json({ found: true, afId, stats, players, events });
+      return res.status(200).json({ found: true, afId, stats, players, fixture: match });
     }
 
-    // ── 3. PLAYER STATS for a team this tournament (from api-football)
+    // ── 3. PLAYER STATS for a team
     if (type === 'playerstats' && teamId) {
-      // teamId here is the API-Football team id, passed from the frontend
-      const data = await af(`/players?league=${WC_LEAGUE_AF}&season=${WC_SEASON_AF}&team=${teamId}`);
+      const data = await af(`/players?league=${WC_AF.league}&season=${WC_AF.season}&team=${teamId}`);
       res.setHeader('Cache-Control', 's-maxage=3600, stale-while-revalidate=7200');
       return res.status(200).json(data);
     }
 
-    // ── 4. SQUAD (football-data.org — for names + positions)
+    // ── 4. SQUAD (football-data.org)
     if (type === 'squad' && teamId) {
-      const data = await fd(`/teams/${teamId}`);
+      const [squadData, afTeamsData] = await Promise.allSettled([
+        fd(`/teams/${teamId}`),
+        af(`/teams?league=${WC_AF.league}&season=${WC_AF.season}`),
+      ]);
+      const squad = squadData.status === 'fulfilled' ? squadData.value : {};
+      const afTeams = afTeamsData.status === 'fulfilled' ? afTeamsData.value.response : [];
       res.setHeader('Cache-Control', 's-maxage=3600, stale-while-revalidate=7200');
-      return res.status(200).json(data);
+      return res.status(200).json({ ...squad, afTeams });
     }
 
-    // ── 5. AF TEAM ID LOOKUP (maps fd team name → af team id)
-    if (type === 'afteams') {
-      const data = await af(`/teams?league=${WC_LEAGUE_AF}&season=${WC_SEASON_AF}`);
-      res.setHeader('Cache-Control', 's-maxage=86400, stale-while-revalidate=172800');
-      return res.status(200).json(data);
-    }
-
-    // ── 6. SCORERS
+    // ── 5. SCORERS
     if (type === 'scorers') {
       const data = await fd(`/competitions/WC/scorers?limit=100`);
       res.setHeader('Cache-Control', 's-maxage=300, stale-while-revalidate=600');
       return res.status(200).json(data);
     }
 
-    // ── 7. ALL-TIME
+    // ── 6. ALL-TIME — merge static baseline + live 2026 goals
     if (type === 'alltime') {
-      let liveGoals = {};
+      // Fetch live scorers to get 2026 goals for active players
+      let wc2026Goals = {}; // player name → goals scored IN 2026 so far
       try {
         const sc = await fd(`/competitions/WC/scorers?limit=100`);
         (sc.scorers || []).forEach(s => {
-          const n = s.player?.name;
-          if (n && ALLTIME_BASE[n]) liveGoals[n] = s.goals || 0;
+          const apiName = s.player?.name || '';
+          const goals   = s.goals || 0;
+          if (!goals) return;
+          // Try to match against every active player using fuzzy match
+          for (const p of ALLTIME) {
+            if (!p.active) continue;
+            if (nameMatch(apiName, p.player)) {
+              wc2026Goals[p.player] = (wc2026Goals[p.player] || 0) + goals;
+              break;
+            }
+          }
         });
-      } catch(e) {}
+      } catch(e) {
+        console.error('scorers fetch failed:', e.message);
+      }
 
-      const merged = ALLTIME_STATIC.map(p => {
-        const live = liveGoals[p.player] || 0;
-        const base = ALLTIME_BASE[p.player]?.pre ?? p.goals;
-        return { ...p, goals: p.active ? base + live : p.goals, wc2026: live };
-      }).sort((a,b) => b.goals - a.goals).map((p,i) => ({ ...p, rank: i+1 }));
+      // Build merged list: total = pre-2026 baseline + goals scored in 2026
+      const merged = ALLTIME.map(p => {
+        const added = p.active ? (wc2026Goals[p.player] || 0) : 0;
+        return {
+          ...p,
+          goals:  p.pre + added,   // TOTAL all-time including 2026
+          wc2026: added,            // how many scored in 2026 specifically
+        };
+      })
+      .sort((a, b) => b.goals - a.goals || a.player.localeCompare(b.player))
+      .map((p, i) => ({ ...p, rank: i + 1 }));
 
       res.setHeader('Cache-Control', 's-maxage=300, stale-while-revalidate=600');
       return res.status(200).json({ scorers: merged });
     }
 
-    // ── 8. DEFAULT — standings + matches + teams
+    // ── 7. DEFAULT — standings + matches + teams
     const [standingsData, matchesData, teamsData] = await Promise.all([
       fd(`/competitions/WC/standings`),
       fd(`/competitions/WC/matches?limit=200`),
@@ -214,7 +235,7 @@ export default async function handler(req, res) {
     });
 
   } catch (err) {
-    console.error('[data.js error]', err.message);
+    console.error('[data.js]', err.message);
     res.status(500).json({ error: err.message });
   }
 }

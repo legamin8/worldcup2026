@@ -1271,9 +1271,14 @@ async function openMatch(matchId){
     renderMatchModal(m, null);
 
     // Then fetch rich stats from API-Football in background
-    const isFin = m.status==='FINISHED';
+    const isFin  = m.status==='FINISHED';
     const isLive = m.status==='IN_PLAY'||m.status==='PAUSED';
     if(isFin||isLive){
+      // Show a loading indicator in the stats area while we fetch
+      const statsPlaceholder = document.getElementById('modal-stats-placeholder');
+      if(statsPlaceholder) statsPlaceholder.innerHTML =
+        `<div style="padding:16px;text-align:center;font-family:Barlow Condensed;color:var(--muted);font-size:12px;letter-spacing:1px">⏳ Loading detailed statistics...</div>`;
+
       const date = m.utcDate?.slice(0,10) ?? '';
       const home = m.homeTeam?.name ?? '';
       const away = m.awayTeam?.name ?? '';
@@ -1282,7 +1287,11 @@ async function openMatch(matchId){
           `/api/data?type=matchstats&date=${encodeURIComponent(date)}&home=${encodeURIComponent(home)}&away=${encodeURIComponent(away)}`
         ).then(r=>r.json());
         if(rich.found) renderMatchModal(m, rich);
-      }catch(e){ /* rich stats failed — basic view stays */ }
+        else if(isFin){
+          const ph = document.getElementById('modal-stats-placeholder');
+          if(ph) ph.innerHTML = `<div style="padding:12px;background:rgba(139,92,246,.05);border:1px solid rgba(139,92,246,.15);border-radius:8px;font-family:Barlow Condensed;font-size:11px;color:var(--muted);text-align:center">📊 Detailed stats not yet available for this match</div>`;
+        }
+      }catch(e){ /* rich stats failed silently */ }
     }
   }catch(e){
     document.getElementById('modal-inner').innerHTML=
@@ -1408,9 +1417,15 @@ function renderMatchModal(m, rich){
       }
     }
   } else if(isFin && !rich){
-    richHtml = `<div class="modal-pw" style="margin-top:8px">⏳ Loading detailed statistics...</div>`;
+    richHtml = ''; // placeholder div handles this
   } else if(isFin && rich && !rich.found){
-    richHtml = `<div class="modal-pw" style="margin-top:8px">📊 Detailed stats will appear here once available from our stats provider.</div>`;
+    richHtml = `<div style="padding:12px;background:rgba(139,92,246,.05);border:1px solid rgba(139,92,246,.15);border-radius:8px;font-family:Barlow Condensed;font-size:11px;color:var(--muted);text-align:center;margin-bottom:12px">📊 Detailed stats not yet available for this match</div>`;
+  }
+
+  // ── If rich data arrived, inject into existing placeholder (no flicker)
+  if(rich !== null){
+    const ph = document.getElementById('modal-stats-placeholder');
+    if(ph){ ph.innerHTML = richHtml || ''; return; }
   }
 
   // ── Lineups (from football-data.org)
@@ -1447,34 +1462,37 @@ function renderMatchModal(m, rich){
       </div>
       ${m.attendance?`<div class="modal-match-info"><span>👥 ${m.attendance.toLocaleString()}</span></div>`:''}
     </div>
-    <div class="modal-body">${evHtml}${richHtml}${lineupHtml}</div>`;
+    <div class="modal-body">${evHtml}<div id="modal-stats-placeholder">${(isFin||isLive)?`<div style="padding:16px;text-align:center;font-family:Barlow Condensed;color:var(--muted);font-size:12px;letter-spacing:1px">⏳ Loading detailed statistics...</div>`:''}</div>${lineupHtml}</div>`;
 }
 
 /* ════════════════════════════════════════
-   SQUAD MODAL — with player stats from API-Football
+   SQUAD MODAL — combined single call
 ════════════════════════════════════════ */
 async function openSquad(fdTeamId, teamName, crestUrl){
   openModalWith(`<div class="modal-loading">Loading ${teamName} squad...</div>`);
   try{
-    // Load squad from football-data.org (names, positions, shirt numbers)
-    const squadData = await fetch(`/api/data?type=squad&teamId=${fdTeamId}`).then(r=>r.json());
-    if(squadData.error) throw new Error(squadData.error);
+    // Single call returns squad + af team list together
+    const data = await fetch(`/api/data?type=squad&teamId=${fdTeamId}`).then(r=>r.json());
+    if(data.error) throw new Error(data.error);
 
-    // Render immediately with basic info
-    renderSquadModal(squadData, null);
+    // Find AF team ID by fuzzy name match
+    const afTeams = data.afTeams || [];
+    const afTeam  = afTeams.find(t => {
+      const an = t.team.name.toLowerCase();
+      const bn = teamName.toLowerCase();
+      return an.includes(bn.split(' ')[0]) || bn.includes(an.split(' ')[0]);
+    });
 
-    // Lookup the API-Football team ID for this team, then fetch player stats
-    try{
-      const afTeamsData = await fetch('/api/data?type=afteams').then(r=>r.json());
-      const afTeam = (afTeamsData.response||[]).find(t=>
-        t.team.name.toLowerCase().includes(teamName.toLowerCase().split(' ')[0]) ||
-        teamName.toLowerCase().includes(t.team.name.toLowerCase().split(' ')[0])
-      );
-      if(afTeam){
+    // Render squad immediately with basic info
+    renderSquadModal(data, null);
+
+    // Fetch player stats if we found the AF team
+    if(afTeam){
+      try{
         const statsData = await fetch(`/api/data?type=playerstats&teamId=${afTeam.team.id}`).then(r=>r.json());
-        if(!statsData.error) renderSquadModal(squadData, statsData.response||[]);
-      }
-    }catch(e){ /* player stats failed — basic view stays */ }
+        if(!statsData.error) renderSquadModal(data, statsData.response||[]);
+      }catch(e){ /* stats failed, basic view stays */ }
+    }
   }catch(e){
     document.getElementById('modal-inner').innerHTML=
       `<div style="padding:20px"><div class="error-box">${e.message}</div></div>`;
