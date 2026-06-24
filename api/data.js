@@ -86,7 +86,16 @@ export default async function handler(req, res) {
       return res.status(200).json({ scorers: merged });
     }
 
-    // Default: standings + matches + teams list
+    // DEBUG: expose raw standings to diagnose team field shapes
+    if (type === 'debug') {
+      const standingsData = await fd(`/competitions/${COMP}/standings`);
+      const firstGroup = standingsData.standings?.find(s => s.type === 'TOTAL' && s.group);
+      const sample = firstGroup?.table?.slice(0, 2) || [];
+      res.setHeader('Cache-Control', 'no-store');
+      return res.status(200).json({ sample, groupKey: firstGroup?.group });
+    }
+
+
     const [standingsData, matchesData, teamsData] = await Promise.all([
       fd(`/competitions/${COMP}/standings`),
       fd(`/competitions/${COMP}/matches?limit=200`),
