@@ -1258,141 +1258,324 @@ async function renderAlltime(){
 }
 
 /* ════════════════════════════════════════
-   MATCH MODAL
+   MATCH MODAL — rich stats from API-Football
 ════════════════════════════════════════ */
 async function openMatch(matchId){
   openModalWith('<div class="modal-loading">Loading match...</div>');
   try{
-    const m=await fetch(`/api/data?type=match&matchId=${matchId}`).then(r=>r.json());
-    if(m.error)throw new Error(m.error);
-    renderMatchModal(m);
+    // Load base match data (football-data.org)
+    const m = await fetch(`/api/data?type=match&matchId=${matchId}`).then(r=>r.json());
+    if(m.error) throw new Error(m.error);
+
+    // Render basic shell immediately so user sees content fast
+    renderMatchModal(m, null);
+
+    // Then fetch rich stats from API-Football in background
+    const isFin = m.status==='FINISHED';
+    const isLive = m.status==='IN_PLAY'||m.status==='PAUSED';
+    if(isFin||isLive){
+      const date = m.utcDate?.slice(0,10) ?? '';
+      const home = m.homeTeam?.name ?? '';
+      const away = m.awayTeam?.name ?? '';
+      try{
+        const rich = await fetch(
+          `/api/data?type=matchstats&date=${encodeURIComponent(date)}&home=${encodeURIComponent(home)}&away=${encodeURIComponent(away)}`
+        ).then(r=>r.json());
+        if(rich.found) renderMatchModal(m, rich);
+      }catch(e){ /* rich stats failed — basic view stays */ }
+    }
   }catch(e){
-    document.getElementById('modal-inner').innerHTML=`<div style="padding:20px"><div class="error-box">${e.message}</div></div>`;
+    document.getElementById('modal-inner').innerHTML=
+      `<div style="padding:20px"><div class="error-box">${e.message}</div></div>`;
   }
 }
-function renderMatchModal(m){
-  const ht=tla(m.homeTeam),at=tla(m.awayTeam);
-  const isLive=m.status==='IN_PLAY'||m.status==='PAUSED';
-  const isFin=m.status==='FINISHED';
-  const hs=m.score?.fullTime?.home,as_=m.score?.fullTime?.away;
-  const grpL=m.group?m.group.replace('GROUP_',''):null;
-  const stageMap={GROUP_STAGE:'Group Stage',ROUND_OF_32:'Round of 32',ROUND_OF_16:'Round of 16',QUARTER_FINALS:'Quarter Finals',SEMI_FINALS:'Semi Finals',FINAL:'Final','3RD_PLACE_PLAY_OFF':'3rd Place'};
-  const goals=m.goals||[];
-  const hGoals=goals.filter(g=>g.team?.id===m.homeTeam?.id);
-  const aGoals=goals.filter(g=>g.team?.id===m.awayTeam?.id);
-  const fmtG=(g,away)=>`<div class="ev-item ${away?'away':''}">
+
+function renderMatchModal(m, rich){
+  const ht  = teamAbbr(m.homeTeam)||tla(m.homeTeam);
+  const at  = teamAbbr(m.awayTeam)||tla(m.awayTeam);
+  const htF = teamFlag(m.homeTeam);
+  const atF = teamFlag(m.awayTeam);
+  const isLive = m.status==='IN_PLAY'||m.status==='PAUSED';
+  const isFin  = m.status==='FINISHED';
+  const hs  = m.score?.fullTime?.home;
+  const as_ = m.score?.fullTime?.away;
+  const grpL = m.group ? m.group.replace('GROUP_','').replace('Group ','') : null;
+  const stageMap = {GROUP_STAGE:'Group Stage',ROUND_OF_32:'Round of 32',ROUND_OF_16:'Round of 16',QUARTER_FINALS:'Quarter Finals',SEMI_FINALS:'Semi Finals',FINAL:'Final','3RD_PLACE_PLAY_OFF':'3rd Place'};
+
+  // ── Goal events (from football-data.org)
+  const goals  = m.goals||[];
+  const hGoals = goals.filter(g=>g.team?.id===m.homeTeam?.id);
+  const aGoals = goals.filter(g=>g.team?.id===m.awayTeam?.id);
+  const fmtG   = (g,away)=>`<div class="ev-item ${away?'away':''}">
     <div class="ev-min">${g.minute}'</div>
     <span style="font-size:14px">${g.type==='OWN_GOAL'?'⚽OG':g.type==='PENALTY'?'⚽P':'⚽'}</span>
     <span style="font-family:Barlow Condensed;font-size:12px;color:var(--text)">${g.scorer?.name||'?'}${g.assist?.name?` <span style="color:var(--muted)">(${g.assist.name})</span>`:''}</span>
   </div>`;
-  const evHtml=goals.length?`<div class="modal-sec-title">Goals</div>
+  const evHtml = goals.length ? `
+    <div class="modal-sec-title">Goals</div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px">
       <div>${hGoals.map(g=>fmtG(g,false)).join('')||'<span style="color:var(--muted);font-family:Barlow Condensed;font-size:11px">—</span>'}</div>
       <div>${aGoals.map(g=>fmtG(g,true)).join('')||'<span style="color:var(--muted);font-family:Barlow Condensed;font-size:11px">—</span>'}</div>
-    </div>`:'';
-  const hL=m.homeTeam?.lineup||[],aL=m.awayTeam?.lineup||[];
-  const lineupHtml=(hL.length||aL.length)?`<div class="modal-sec-title">Line-ups</div>
+    </div>` : '';
+
+  // ── Rich stats block (from API-Football)
+  let richHtml = '';
+  if(rich?.found && rich.stats?.length){
+    // stats = [{team:{id,name,logo}, statistics:[{type,value},...]}]
+    const homeStats = rich.stats[0]?.statistics || [];
+    const awayStats = rich.stats[1]?.statistics || [];
+    const getStat   = (arr, type) => arr.find(s=>s.type===type)?.value ?? '–';
+
+    const STAT_ROWS = [
+      ['Ball Possession','Possession'],
+      ['Total Shots','Shots'],
+      ['Shots on Goal','On Target'],
+      ['Shots off Goal','Off Target'],
+      ['Blocked Shots','Blocked'],
+      ['Corner Kicks','Corners'],
+      ['Fouls','Fouls'],
+      ['Yellow Cards','🟨'],
+      ['Red Cards','🟥'],
+      ['Goalkeeper Saves','Saves'],
+      ['Offsides','Offsides'],
+      ['Total passes','Passes'],
+      ['Passes accurate','Pass Acc.'],
+    ];
+
+    const rows = STAT_ROWS.map(([apiKey, label])=>{
+      const hv = getStat(homeStats, apiKey);
+      const av = getStat(awayStats, apiKey);
+      if(hv==='–'&&av==='–') return '';
+      // Build percentage bar where both values are numbers or percentages
+      const hNum = parseFloat(String(hv).replace('%',''));
+      const aNum = parseFloat(String(av).replace('%',''));
+      let barHtml = '';
+      if(!isNaN(hNum)&&!isNaN(aNum)&&(hNum+aNum)>0){
+        const hPct = Math.round(hNum/(hNum+aNum)*100);
+        barHtml = `<div style="display:flex;height:3px;border-radius:2px;overflow:hidden;margin:4px 0;background:var(--border)">
+          <div style="width:${hPct}%;background:var(--blue)"></div>
+          <div style="width:${100-hPct}%;background:var(--purple)"></div>
+        </div>`;
+      }
+      return `<div style="display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--border)">
+        <div style="font-family:Bebas Neue;font-size:16px;color:var(--blue);text-align:right">${hv}</div>
+        <div style="font-family:Barlow Condensed;font-size:9px;letter-spacing:1px;text-transform:uppercase;color:var(--muted);text-align:center;white-space:nowrap">${label}</div>
+        <div style="font-family:Bebas Neue;font-size:16px;color:var(--purple)">${av}</div>
+      </div>${barHtml}`;
+    }).filter(Boolean).join('');
+
+    if(rows){
+      richHtml += `<div class="modal-sec-title" style="margin-top:12px">Match Statistics</div>
+        <div style="display:grid;grid-template-columns:1fr auto 1fr;gap:4px;padding:4px 0;margin-bottom:4px">
+          <div style="font-family:Barlow Condensed;font-size:10px;font-weight:700;text-transform:uppercase;color:var(--blue);text-align:right">${m.homeTeam?.shortName||ht}</div>
+          <div></div>
+          <div style="font-family:Barlow Condensed;font-size:10px;font-weight:700;text-transform:uppercase;color:var(--purple)">${m.awayTeam?.shortName||at}</div>
+        </div>
+        <div style="margin-bottom:16px">${rows}</div>`;
+    }
+
+    // ── Player ratings (top performers)
+    if(rich.players?.length){
+      const allPlayers = [];
+      rich.players.forEach(teamData=>{
+        const isHome = teamData.team.id === rich.stats[0]?.team?.id;
+        (teamData.players||[]).forEach(p=>{
+          const rating = parseFloat(p.statistics?.[0]?.games?.rating||0);
+          if(rating>0) allPlayers.push({...p, isHome, rating});
+        });
+      });
+      allPlayers.sort((a,b)=>b.rating-a.rating);
+      const top6 = allPlayers.slice(0,6);
+      if(top6.length){
+        const playerCards = top6.map(p=>{
+          const s = p.statistics?.[0] || {};
+          const mins = s.games?.minutes||0;
+          const goals = s.goals?.total||0;
+          const assists = s.goals?.assists||0;
+          const rating = p.rating.toFixed(1);
+          const rColor = p.rating>=8?'var(--green)':p.rating>=7?'var(--gold)':'var(--muted)';
+          return `<div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:8px 10px;display:flex;align-items:center;gap:8px;">
+            <img src="${p.player?.photo||''}" alt="" style="width:34px;height:34px;border-radius:50%;object-fit:cover;background:var(--surface3)" onerror="this.style.display='none'">
+            <div style="flex:1;min-width:0">
+              <div style="font-family:Barlow Condensed;font-size:12px;font-weight:700;text-transform:uppercase;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p.player?.name||'?'}</div>
+              <div style="font-family:Barlow Condensed;font-size:10px;color:var(--muted)">${mins}' ${goals>0?`⚽${goals}`:''}${assists>0?` 🎯${assists}`:''}</div>
+            </div>
+            <div style="font-family:Bebas Neue;font-size:18px;color:${rColor}">${rating}</div>
+          </div>`;
+        }).join('');
+        richHtml += `<div class="modal-sec-title">Top Performers</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:16px">${playerCards}</div>`;
+      }
+    }
+  } else if(isFin && !rich){
+    richHtml = `<div class="modal-pw" style="margin-top:8px">⏳ Loading detailed statistics...</div>`;
+  } else if(isFin && rich && !rich.found){
+    richHtml = `<div class="modal-pw" style="margin-top:8px">📊 Detailed stats will appear here once available from our stats provider.</div>`;
+  }
+
+  // ── Lineups (from football-data.org)
+  const hL = m.homeTeam?.lineup||[];
+  const aL = m.awayTeam?.lineup||[];
+  const lineupHtml = (hL.length||aL.length) ? `
+    <div class="modal-sec-title">Line-ups</div>
     <div class="lineup-grid">
-      <div><div style="font-family:Barlow Condensed;font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--muted);margin-bottom:6px">${m.homeTeam?.shortName||ht} ${m.homeTeam?.formation?`(${m.homeTeam.formation})`:''}</div>
+      <div><div style="font-family:Barlow Condensed;font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--muted);margin-bottom:6px">${m.homeTeam?.shortName||ht}${m.homeTeam?.formation?` (${m.homeTeam.formation})`:''}</div>
         ${hL.map(p=>`<div class="lp"><span class="lnum">${p.shirtNumber||''}</span>${p.name}</div>`).join('')}</div>
-      <div><div style="font-family:Barlow Condensed;font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--muted);margin-bottom:6px">${m.awayTeam?.shortName||at} ${m.awayTeam?.formation?`(${m.awayTeam.formation})`:''}</div>
+      <div><div style="font-family:Barlow Condensed;font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--muted);margin-bottom:6px">${m.awayTeam?.shortName||at}${m.awayTeam?.formation?` (${m.awayTeam.formation})`:''}</div>
         ${aL.map(p=>`<div class="lp"><span class="lnum">${p.shirtNumber||''}</span>${p.name}</div>`).join('')}</div>
-    </div>`:'';
-  const noData=(!hL.length&&!aL.length&&isFin)?`<div class="modal-pw">📊 Detailed stats & line-ups require a <a href="https://www.football-data.org/pricing" target="_blank">paid plan</a>.</div>`:'';
+    </div>` : '';
 
   document.getElementById('modal-inner').innerHTML=`
     <div class="modal-hdr">
       <div>
-        <div style="font-family:Barlow Condensed;font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--gold)">${stageMap[m.stage]||''} ${grpL?'· Group '+grpL:''}</div>
+        <div style="font-family:Barlow Condensed;font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--gold)">${stageMap[m.stage]||m.stage||''} ${grpL?'· Group '+grpL:''}</div>
         <div style="font-family:Barlow Condensed;font-size:11px;color:var(--muted);margin-top:2px">${longDate(m.utcDate)} · ${catTime(m.utcDate)} CAT · ${m.venue||'TBD'}</div>
       </div>
       <button class="modal-close" onclick="closeModal()">✕</button>
     </div>
     <div class="modal-score-section">
       <div class="modal-teams-row">
-        <div class="modal-team"><div class="modal-team-flag">${flag(ht)}</div><div class="modal-team-name">${m.homeTeam?.name||fname(ht)}</div></div>
+        <div class="modal-team"><div class="modal-team-flag">${htF}</div><div class="modal-team-name">${m.homeTeam?.name||fname(ht)}</div></div>
         <div>
           <div class="modal-scoreline ${isLive?'live':''}">${isFin||isLive?`${hs??'?'} – ${as_??'?'}`:'vs'}</div>
           <div style="font-family:Barlow Condensed;font-size:10px;letter-spacing:1px;text-align:center;color:${isFin?'var(--muted)':isLive?'var(--red)':'var(--blue)'}">
-            ${isFin?'FULL TIME':isLive?`● LIVE ${m.minute?m.minute+"'":''}`:catTime(m.utcDate)+' CAT'}</div>
+            ${isFin?'FULL TIME':isLive?`● LIVE ${m.minute?m.minute+"'":''}`:catTime(m.utcDate)+' CAT'}
+          </div>
           ${m.score?.halfTime?.home!=null?`<div style="font-family:Barlow Condensed;font-size:10px;color:var(--muted);text-align:center;margin-top:4px">HT: ${m.score.halfTime.home}–${m.score.halfTime.away}</div>`:''}
         </div>
-        <div class="modal-team"><div class="modal-team-flag">${flag(at)}</div><div class="modal-team-name">${m.awayTeam?.name||fname(at)}</div></div>
+        <div class="modal-team"><div class="modal-team-flag">${atF}</div><div class="modal-team-name">${m.awayTeam?.name||fname(at)}</div></div>
       </div>
       ${m.attendance?`<div class="modal-match-info"><span>👥 ${m.attendance.toLocaleString()}</span></div>`:''}
     </div>
-    <div class="modal-body">${evHtml}${noData}${lineupHtml}</div>`;
+    <div class="modal-body">${evHtml}${richHtml}${lineupHtml}</div>`;
 }
 
 /* ════════════════════════════════════════
-   SQUAD MODAL
+   SQUAD MODAL — with player stats from API-Football
 ════════════════════════════════════════ */
-async function openSquad(teamId,teamName,crestUrl){
+async function openSquad(fdTeamId, teamName, crestUrl){
   openModalWith(`<div class="modal-loading">Loading ${teamName} squad...</div>`);
   try{
-    const data=await fetch(`/api/data?type=squad&teamId=${teamId}`).then(r=>r.json());
-    if(data.error)throw new Error(data.error);
-    renderSquadModal(data);
+    // Load squad from football-data.org (names, positions, shirt numbers)
+    const squadData = await fetch(`/api/data?type=squad&teamId=${fdTeamId}`).then(r=>r.json());
+    if(squadData.error) throw new Error(squadData.error);
+
+    // Render immediately with basic info
+    renderSquadModal(squadData, null);
+
+    // Lookup the API-Football team ID for this team, then fetch player stats
+    try{
+      const afTeamsData = await fetch('/api/data?type=afteams').then(r=>r.json());
+      const afTeam = (afTeamsData.response||[]).find(t=>
+        t.team.name.toLowerCase().includes(teamName.toLowerCase().split(' ')[0]) ||
+        teamName.toLowerCase().includes(t.team.name.toLowerCase().split(' ')[0])
+      );
+      if(afTeam){
+        const statsData = await fetch(`/api/data?type=playerstats&teamId=${afTeam.team.id}`).then(r=>r.json());
+        if(!statsData.error) renderSquadModal(squadData, statsData.response||[]);
+      }
+    }catch(e){ /* player stats failed — basic view stays */ }
   }catch(e){
-    document.getElementById('modal-inner').innerHTML=`<div style="padding:20px"><div class="error-box">${e.message}</div></div>`;
+    document.getElementById('modal-inner').innerHTML=
+      `<div style="padding:20px"><div class="error-box">${e.message}</div></div>`;
   }
 }
 
-function renderSquadModal(team){
-  // Build scorer map for this team
+function renderSquadModal(team, afPlayers){
+  // Build scorer map (goals this tournament, from STATE.scorers)
   const scorerMap={};
   STATE.scorers.forEach(sc=>{
-    if(sc.team?.id===team.id) scorerMap[sc.player?.id]=sc.goals||0;
+    if(sc.team?.id===team.id) scorerMap[sc.player?.id]=sc;
   });
 
-  const squad=team.squad||[];
-  const byPos={};
+  // Build AF player stats map by name (best match we have without a cross-ID table)
+  const afMap={};
+  if(afPlayers){
+    afPlayers.forEach(p=>{
+      const key = p.player.name.toLowerCase();
+      afMap[key] = p;
+    });
+  }
+
+  const squad = team.squad||[];
+  const byPos = {};
   squad.forEach(p=>{const pos=p.position||'Other';if(!byPos[pos])byPos[pos]=[];byPos[pos].push(p);});
   const orderedPos=[...POS_ORDER,...Object.keys(byPos).filter(k=>!POS_ORDER.includes(k))];
 
-  const crestHtml=team.crest?`<img class="squad-crest" src="${team.crest}" alt="" onerror="this.style.display='none'">`:`<span style="font-size:36px">${flag(team.tla||'')}</span>`;
+  const crestHtml = team.crest
+    ? `<img class="squad-crest" src="${team.crest}" alt="" onerror="this.style.display='none'">`
+    : `<span style="font-size:36px">${teamFlag(team)}</span>`;
 
   let posHtml='';
   orderedPos.forEach(pos=>{
     const players=byPos[pos];
     if(!players?.length)return;
-    const cards=players.map((p,i)=>{
-      const goals=scorerMap[p.id]||0;
-      const goalBadge=goals>0?`<div class="player-goals-badge">⚽ ${goals}</div>`:'';
+    const cards=players.map(p=>{
+      const fdScorer = scorerMap[p.id];
+      const goals    = fdScorer?.goals||0;
+      const assists  = fdScorer?.assists||0;
+
+      // Try to match AF player by name
+      const afP = afMap[p.name.toLowerCase()];
+      const afS = afP?.statistics?.[0];
+      const mins    = afS?.games?.minutes||0;
+      const rating  = parseFloat(afS?.games?.rating||0);
+      const yCards  = afS?.cards?.yellow||0;
+      const rCards  = afS?.cards?.red||0;
+      const shots   = afS?.shots?.total||0;
+      const photo   = afP?.player?.photo||'';
+
+      const rColor  = rating>=8?'var(--green)':rating>=7?'var(--gold)':'var(--muted)';
+
+      const statsBadges = [
+        goals   > 0 ? `<span style="background:rgba(245,200,66,.15);border:1px solid rgba(245,200,66,.3);color:var(--gold);font-size:9px;padding:1px 5px;border-radius:8px">⚽ ${goals}</span>` : '',
+        assists > 0 ? `<span style="background:rgba(59,130,246,.15);border:1px solid rgba(59,130,246,.3);color:var(--blue);font-size:9px;padding:1px 5px;border-radius:8px">🎯 ${assists}</span>` : '',
+        yCards  > 0 ? `<span style="font-size:9px">🟨${yCards}</span>` : '',
+        rCards  > 0 ? `<span style="font-size:9px">🟥${rCards}</span>` : '',
+      ].filter(Boolean).join('');
+
       return`<div class="player-card">
-        <div class="player-card-ph" id="sq-${p.id}">${flag(team.tla||'')}</div>
+        ${photo
+          ? `<img class="player-card-photo" src="${photo}" alt="${p.name}" loading="lazy" onerror="this.outerHTML='<div class=player-card-ph id=sq-${p.id}>${teamFlag(team)}</div>'">`
+          : `<div class="player-card-ph" id="sq-${p.id}">${teamFlag(team)}</div>`
+        }
         <div class="player-num">#${p.shirtNumber||'?'}</div>
         <div class="player-name">${p.name}</div>
         <div class="player-pos">${p.position||''}</div>
-        ${goalBadge}
+        ${mins>0?`<div style="font-family:Barlow Condensed;font-size:9px;color:var(--muted)">${mins}' played${rating>0?` · <span style="color:${rColor}">${rating.toFixed(1)}</span>`:''}</div>`:''}
+        ${statsBadges?`<div style="display:flex;gap:3px;flex-wrap:wrap;justify-content:center">${statsBadges}</div>`:''}
       </div>`;
     }).join('');
     posHtml+=`<div class="squad-pos-title">${pos}s</div><div class="squad-grid">${cards}</div>`;
-    // Lazy load photos
-    players.forEach(p=>loadSquadPhoto(p.name,p.id));
+
+    // Lazy-load wiki photos only where we don't have AF photos
+    if(!afPlayers){
+      players.forEach(p=>loadSquadPhoto(p.name,p.id));
+    }
   });
 
   document.getElementById('modal-inner').innerHTML=`
     <div class="modal-hdr">
-      <div style="font-family:Barlow Condensed;font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--gold)">Squad</div>
+      <div style="font-family:Barlow Condensed;font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--gold)">Squad · WC 2026 Stats</div>
       <button class="modal-close" onclick="closeModal()">✕</button>
     </div>
     <div class="squad-team-hdr">
       ${crestHtml}
       <div>
         <div class="squad-team-name">${team.name}</div>
-        <div class="squad-team-nat">${team.area?.name||''} · ${squad.length} players</div>
+        <div class="squad-team-nat">${team.area?.name||''} · ${squad.length} players${afPlayers?' · Stats loaded':''}</div>
       </div>
     </div>
-    <div class="squad-section">${posHtml}</div>`;
+    <div class="squad-section">${posHtml||'<div class="error-box">No squad data available</div>'}</div>`;
 }
 
-async function loadSquadPhoto(name,pid){
+async function loadSquadPhoto(name, pid){
   const url=await wikiPhoto(name);
   if(!url)return;
   const el=document.getElementById(`sq-${pid}`);
   if(el) el.outerHTML=`<img class="player-card-photo" src="${url}" alt="${name}" loading="lazy" onerror="this.style.display='none'">`;
 }
+
 
 /* ════════════════════════════════════════
    MODAL UTILS
