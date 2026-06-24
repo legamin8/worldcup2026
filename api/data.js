@@ -1,75 +1,96 @@
 const API_KEY = process.env.FOOTBALL_DATA_API_KEY;
 const BASE = 'https://api.football-data.org/v4';
 const COMP = 'WC';
+const headers = { 'X-Auth-Token': API_KEY };
 
-const headers = {
-  'X-Auth-Token': API_KEY,
-  'Content-Type': 'application/json',
-};
-
-async function fetchFD(path) {
-  const res = await fetch(`${BASE}${path}`, { headers });
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`football-data.org ${path} → ${res.status}: ${text}`);
-  }
-  return res.json();
+async function fd(path) {
+  const r = await fetch(`${BASE}${path}`, { headers });
+  if (!r.ok) throw new Error(`${path} → ${r.status}: ${await r.text()}`);
+  return r.json();
 }
 
+// All-time pre-2026 goals per active player (pre-tournament baseline)
+const ALLTIME_BASE = {
+  'Lionel Messi':    { pre: 13, country: 'Argentina', flag: '🇦🇷', years: '2006–2022', wiki: 'Lionel_Messi' },
+  'Kylian Mbappé':  { pre: 12, country: 'France',    flag: '🇫🇷', years: '2018–2022', wiki: 'Kylian_Mbappé' },
+  'Cristiano Ronaldo':{ pre: 8, country: 'Portugal', flag: '🇵🇹', years: '2006–2022', wiki: 'Cristiano_Ronaldo' },
+  'Neymar Jr':      { pre: 6,  country: 'Brazil',    flag: '🇧🇷', years: '2014–2022', wiki: 'Neymar' },
+};
+
+const ALLTIME_STATIC = [
+  { player:'Miroslav Klose',   country:'Germany',  flag:'🇩🇪', goals:16, years:'2002–2014', wiki:'Miroslav_Klose',             active:false },
+  { player:'Ronaldo Nazário',  country:'Brazil',   flag:'🇧🇷', goals:15, years:'1994–2006', wiki:'Ronaldo_(Brazilian_footballer)', active:false },
+  { player:'Gerd Müller',      country:'Germany',  flag:'🇩🇪', goals:14, years:'1970–1974', wiki:'Gerd_Müller',                active:false },
+  { player:'Just Fontaine',    country:'France',   flag:'🇫🇷', goals:13, years:'1958',      wiki:'Just_Fontaine',              active:false },
+  { player:'Lionel Messi',     country:'Argentina',flag:'🇦🇷', goals:13, years:'2006–',     wiki:'Lionel_Messi',               active:true  },
+  { player:'Pelé',             country:'Brazil',   flag:'🇧🇷', goals:12, years:'1958–1970', wiki:'Pelé',                      active:false },
+  { player:'Kylian Mbappé',    country:'France',   flag:'🇫🇷', goals:12, years:'2018–',     wiki:'Kylian_Mbappé',             active:true  },
+  { player:'Sándor Kocsis',    country:'Hungary',  flag:'🇭🇺', goals:11, years:'1954',      wiki:'Sándor_Kocsis',              active:false },
+  { player:'Jürgen Klinsmann', country:'Germany',  flag:'🇩🇪', goals:11, years:'1990–1998', wiki:'Jürgen_Klinsmann',           active:false },
+  { player:'Thomas Müller',    country:'Germany',  flag:'🇩🇪', goals:10, years:'2010–2018', wiki:'Thomas_Müller',              active:false },
+  { player:'Teófilo Cubillas', country:'Peru',     flag:'🇵🇪', goals:10, years:'1970–1978', wiki:'Teófilo_Cubillas',           active:false },
+  { player:'Grzegorz Lato',    country:'Poland',   flag:'🇵🇱', goals:10, years:'1974–1982', wiki:'Grzegorz_Lato',              active:false },
+  { player:'Gary Lineker',     country:'England',  flag:'🏴󠁧󠁢󠁥󠁮󠁧󠁿', goals:10, years:'1986–1990', wiki:'Gary_Lineker',              active:false },
+  { player:'Gabriel Batistuta',country:'Argentina',flag:'🇦🇷', goals:10, years:'1994–2002', wiki:'Gabriel_Batistuta',          active:false },
+  { player:'Cristiano Ronaldo',country:'Portugal', flag:'🇵🇹', goals:8,  years:'2006–',     wiki:'Cristiano_Ronaldo',          active:true  },
+];
+
 export default async function handler(req, res) {
-  // CORS for public access
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  if (req.method === 'OPTIONS') return res.status(200).end();
 
-  if (req.method === 'OPTIONS') {
-    res.status(200).end();
-    return;
-  }
-
-  const { type, matchId } = req.query;
+  const { type, matchId, teamId } = req.query;
 
   try {
-    // ── Single match detail (for modal)
+    // Single match detail
     if (type === 'match' && matchId) {
-      const data = await fetchFD(`/matches/${matchId}`);
+      const data = await fd(`/matches/${matchId}`);
       res.setHeader('Cache-Control', 's-maxage=30, stale-while-revalidate=60');
       return res.status(200).json(data);
     }
 
-    // ── Scorers
+    // Team squad (on-demand)
+    if (type === 'squad' && teamId) {
+      const data = await fd(`/teams/${teamId}`);
+      res.setHeader('Cache-Control', 's-maxage=3600, stale-while-revalidate=7200');
+      return res.status(200).json(data);
+    }
+
+    // Scorers
     if (type === 'scorers') {
-      const data = await fetchFD(`/competitions/${COMP}/scorers?limit=50`);
+      const data = await fd(`/competitions/${COMP}/scorers?limit=100`);
       res.setHeader('Cache-Control', 's-maxage=300, stale-while-revalidate=600');
       return res.status(200).json(data);
     }
 
-    // ── All-time WC scorers (historical — separate season filter not needed;
-    //    football-data.org returns the active season's scorers automatically)
+    // All-time + live 2026 totals merged
     if (type === 'alltime') {
-      // All-time WC top scorers are a static well-known list.
-      // football-data.org doesn't provide historical WC scorer records,
-      // so we return a curated static list here.
-      const alltime = [
-        { rank:1, player:'Miroslav Klose', country:'Germany', flag:'🇩🇪', goals:16, tournaments:'2002,2006,2010,2014', img:'Miroslav_Klose' },
-        { rank:2, player:'Ronaldo Nazário', country:'Brazil', flag:'🇧🇷', goals:15, tournaments:'1994,1998,2002,2006', img:'Ronaldo_Nazário' },
-        { rank:3, player:'Gerd Müller', country:'Germany', flag:'🇩🇪', goals:14, tournaments:'1970,1974', img:'Gerd_Müller' },
-        { rank:4, player:'Just Fontaine', country:'France', flag:'🇫🇷', goals:13, tournaments:'1958', img:'Just_Fontaine' },
-        { rank:5, player:'Pelé', country:'Brazil', flag:'🇧🇷', goals:12, tournaments:'1958,1962,1966,1970', img:'Pelé' },
-        { rank:6, player:'Jürgen Klinsmann', country:'Germany', flag:'🇩🇪', goals:11, tournaments:'1990,1994,1998', img:'Jürgen_Klinsmann' },
-        { rank:6, player:'Sándor Kocsis', country:'Hungary', flag:'🇭🇺', goals:11, tournaments:'1954', img:'Sándor_Kocsis' },
-        { rank:8, player:'Teófilo Cubillas', country:'Peru', flag:'🇵🇪', goals:10, tournaments:'1970,1978', img:'Teófilo_Cubillas' },
-        { rank:8, player:'Grzegorz Lato', country:'Poland', flag:'🇵🇱', goals:10, tournaments:'1974,1978,1982', img:'Grzegorz_Lato' },
-        { rank:8, player:'Gary Lineker', country:'England', flag:'🏴󠁧󠁢󠁥󠁮󠁧󠁿', goals:10, tournaments:'1986,1990', img:'Gary_Lineker' },
-        { rank:8, player:'Lionel Messi', country:'Argentina', flag:'🇦🇷', goals:13, tournaments:'2006,2010,2014,2018,2022', img:'Lionel_Messi' },
-        { rank:8, player:'Cristiano Ronaldo', country:'Portugal', flag:'🇵🇹', goals:8, tournaments:'2006,2010,2014,2018,2022', img:'Cristiano_Ronaldo' },
-      ].sort((a,b) => b.goals - a.goals);
-      return res.status(200).json({ scorers: alltime });
+      let liveGoals = {};
+      try {
+        const sc = await fd(`/competitions/${COMP}/scorers?limit=100`);
+        (sc.scorers || []).forEach(s => {
+          const name = s.player?.name;
+          if (name && ALLTIME_BASE[name]) liveGoals[name] = s.goals || 0;
+        });
+      } catch(e) {}
+
+      const merged = ALLTIME_STATIC.map(p => {
+        const live = liveGoals[p.player] || 0;
+        const base = ALLTIME_BASE[p.player]?.pre || p.goals;
+        return { ...p, goals: p.active ? base + live : p.goals, wc2026: live };
+      }).sort((a, b) => b.goals - a.goals)
+        .map((p, i) => ({ ...p, rank: i + 1 }));
+
+      res.setHeader('Cache-Control', 's-maxage=300, stale-while-revalidate=600');
+      return res.status(200).json({ scorers: merged });
     }
 
-    // ── Default: full dashboard data (standings + matches)
-    const [standingsData, matchesData] = await Promise.all([
-      fetchFD(`/competitions/${COMP}/standings`),
-      fetchFD(`/competitions/${COMP}/matches?limit=200`),
+    // Default: standings + matches + teams list
+    const [standingsData, matchesData, teamsData] = await Promise.all([
+      fd(`/competitions/${COMP}/standings`),
+      fd(`/competitions/${COMP}/matches?limit=200`),
+      fd(`/competitions/${COMP}/teams`),
     ]);
 
     res.setHeader('Cache-Control', 's-maxage=180, stale-while-revalidate=300');
@@ -77,6 +98,7 @@ export default async function handler(req, res) {
       standings: standingsData.standings,
       season: standingsData.season,
       matches: matchesData.matches,
+      teams: teamsData.teams,
       lastUpdated: new Date().toISOString(),
     });
 
