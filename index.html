@@ -61,12 +61,12 @@ body{background:var(--bg);color:var(--text);font-family:'Barlow',sans-serif;min-
 @keyframes blink{0%,100%{opacity:1}50%{opacity:.2}}
 .updated{color:var(--muted);font-size:10px;font-family:'Barlow Condensed',sans-serif;letter-spacing:.5px;}
 .icon-btn{
-  background:var(--surface2);border:1px solid var(--border);
+  background:var(--surface2);
   color:var(--text2);width:34px;height:34px;border-radius:10px;
   display:flex;align-items:center;justify-content:center;
   cursor:pointer;font-size:16px;transition:all .2s;flex-shrink:0;
 }
-.icon-btn:hover{background:var(--surface3);border-color:var(--border2);color:var(--text);}
+.icon-btn:hover{background:var(--surface3);color:var(--text);}
 
 /* ════════════════════════════════════════
    NAV
@@ -115,11 +115,11 @@ body{background:var(--bg);color:var(--text);font-family:'Barlow',sans-serif;min-
 ════════════════════════════════════════ */
 .groups-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;}
 .group-card{
-  background:var(--surface);border:1px solid var(--border);
+  background:var(--surface);
   border-radius:12px;overflow:hidden;
-  box-shadow:var(--shadow);transition:border-color .2s,transform .2s;
+  box-shadow:0 2px 20px rgba(0,0,0,.25);transition:box-shadow .2s,transform .2s;
 }
-.group-card:hover{border-color:var(--border2);transform:translateY(-2px);}
+.group-card:hover{box-shadow:0 8px 32px rgba(0,0,0,.35);transform:translateY(-2px);}
 .group-card-hdr{
   background:linear-gradient(135deg,var(--surface2),var(--bg2));
   border-bottom:1px solid var(--border);padding:10px 14px;
@@ -128,7 +128,7 @@ body{background:var(--bg);color:var(--text);font-family:'Barlow',sans-serif;min-
 .group-lbl{font-family:'Bebas Neue',sans-serif;font-size:20px;color:var(--gold);}
 .col-hdrs{display:flex;gap:10px;font-family:'Barlow Condensed',sans-serif;font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--muted);}
 .col-hdrs span{width:20px;text-align:center;}
-.team-row{display:flex;align-items:center;padding:9px 14px;border-bottom:1px solid var(--border);gap:8px;transition:background .15s;cursor:pointer;}
+.team-row{display:flex;align-items:center;padding:9px 14px;border-bottom:1px solid rgba(255,255,255,.04);gap:8px;transition:background .15s;cursor:pointer;}
 .team-row:last-child{border-bottom:none;}
 .team-row:hover{background:var(--card-hover);}
 .team-rank{font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:700;color:var(--muted);width:14px;text-align:center;flex-shrink:0;}
@@ -156,14 +156,14 @@ body{background:var(--bg);color:var(--text);font-family:'Barlow',sans-serif;min-
 .acc-chev.open{transform:rotate(180deg);}
 .acc-body{display:none;}
 .acc-body.open{display:block;}
-.match-row{display:flex;align-items:center;padding:7px 14px;border-bottom:1px solid var(--border);gap:6px;font-family:'Barlow Condensed',sans-serif;font-size:11px;cursor:pointer;transition:background .15s;}
+.match-row{display:flex;align-items:center;padding:7px 14px;border-bottom:1px solid rgba(255,255,255,.04);gap:6px;font-family:'Barlow Condensed',sans-serif;font-size:11px;cursor:pointer;transition:background .15s;}
 .match-row:last-child{border-bottom:none;}
 .match-row:hover{background:var(--card-hover);}
 .match-date{color:var(--muted);font-size:9px;width:56px;flex-shrink:0;line-height:1.3;}
 .match-teams{flex:1;display:flex;align-items:center;gap:5px;}
 .mtn{font-size:11px;font-weight:600;text-transform:uppercase;}
 .mvs{color:var(--muted);font-size:9px;}
-.mscore{font-weight:700;font-size:12px;color:var(--text);background:var(--surface2);padding:2px 7px;border-radius:6px;border:1px solid var(--border);flex-shrink:0;min-width:36px;text-align:center;}
+.mscore{font-weight:700;font-size:12px;color:var(--text);background:var(--surface2);padding:2px 7px;border-radius:6px;flex-shrink:0;min-width:36px;text-align:center;}
 .mscore.up{color:var(--muted);font-size:9px;}
 .mst{font-size:9px;color:var(--muted);width:20px;text-align:right;flex-shrink:0;}
 .mst.live{color:var(--red);animation:blink 1s infinite;}
@@ -172,9 +172,9 @@ body{background:var(--bg);color:var(--text);font-family:'Barlow',sans-serif;min-
    CALENDAR + FIXTURES
 ════════════════════════════════════════ */
 .cal-strip{
-  background:var(--surface);border:1px solid var(--border);
+  background:var(--surface);
   border-radius:12px;padding:14px 16px;margin-bottom:16px;
-  box-shadow:var(--shadow);
+  box-shadow:0 2px 20px rgba(0,0,0,.25);
 }
 .cal-month{font-family:'Bebas Neue',sans-serif;font-size:18px;letter-spacing:2px;color:var(--text);margin-bottom:10px;}
 .cal-days{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;padding-bottom:2px;}
@@ -184,7 +184,7 @@ body{background:var(--bg);color:var(--text);font-family:'Barlow',sans-serif;min-
   padding:8px 12px;border-radius:10px;cursor:pointer;flex-shrink:0;
   border:1px solid transparent;transition:all .2s;min-width:52px;
 }
-.cal-day:hover{background:var(--surface2);border-color:var(--border);}
+.cal-day:hover{background:var(--surface2);}
 .cal-day.active{background:var(--gold);border-color:var(--gold);}
 .cal-day.active .cal-dow,.cal-day.active .cal-num,.cal-day.active .cal-dot{color:#000;}
 .cal-day.has-games .cal-dot{background:var(--gold);}
@@ -198,13 +198,13 @@ body{background:var(--bg);color:var(--text);font-family:'Barlow',sans-serif;min-
 .day-count{font-family:'Barlow Condensed',sans-serif;font-size:11px;color:var(--muted);letter-spacing:1px;}
 
 .fx-card{
-  background:var(--surface);border:1px solid var(--border);border-radius:12px;
+  background:var(--surface);border-radius:12px;
   margin-bottom:10px;overflow:hidden;cursor:pointer;
   transition:border-color .2s,box-shadow .2s,transform .15s;
   box-shadow:var(--shadow);
 }
-.fx-card:hover{border-color:rgba(245,200,66,.4);box-shadow:0 8px 30px rgba(245,200,66,.08);transform:translateY(-1px);}
-.fx-card.live-card{border-color:var(--red);animation:livePulse 2s infinite;}
+.fx-card:hover{box-shadow:0 8px 30px rgba(245,200,66,.12);transform:translateY(-1px);}
+.fx-card.live-card{box-shadow:0 0 0 1px var(--red);animation:livePulse 2s infinite;}
 @keyframes livePulse{0%,100%{box-shadow:0 0 0 0 rgba(230,57,70,.3)}50%{box-shadow:0 0 0 6px rgba(230,57,70,.0)}}
 .fx-inner{display:flex;align-items:center;padding:14px 18px;gap:14px;}
 .fx-time{font-family:'Barlow Condensed',sans-serif;width:56px;flex-shrink:0;text-align:center;}
@@ -273,11 +273,10 @@ body{background:var(--bg);color:var(--text);font-family:'Barlow',sans-serif;min-
 
 /* Group mini-card on the sides */
 .grp-card{
-  margin:2px 3px;background:var(--surface2);border:1px solid var(--border);
+  margin:2px 3px;background:var(--surface2);
   border-radius:8px;padding:6px 8px;font-family:'Barlow Condensed',sans-serif;
-  transition:border-color .2s;
 }
-.grp-card:hover{border-color:var(--border2);}
+
 .grp-card-lbl{font-size:8px;letter-spacing:2px;text-transform:uppercase;color:var(--gold);font-weight:700;margin-bottom:4px;}
 .grp-team{display:flex;align-items:center;gap:4px;font-size:10px;font-weight:600;text-transform:uppercase;padding:2px 0;border-bottom:1px solid rgba(255,255,255,.04);}
 .grp-team:last-child{border-bottom:none;}
@@ -296,11 +295,12 @@ body{background:var(--bg);color:var(--text);font-family:'Barlow',sans-serif;min-
 
 /* Match card */
 .b-match{
-  margin:2px 5px;background:var(--surface);border:1px solid var(--border);
-  border-radius:8px;overflow:hidden;position:relative;transition:border-color .2s,box-shadow .2s;
+  margin:2px 5px;background:var(--surface);
+  border-radius:8px;overflow:hidden;position:relative;
+  box-shadow:0 1px 8px rgba(0,0,0,.2);transition:box-shadow .2s;
 }
-.b-match:hover{border-color:rgba(245,200,66,.35);box-shadow:0 2px 12px rgba(0,0,0,.3);}
-.b-match.gold-card{border-color:rgba(245,200,66,.5);box-shadow:0 0 16px rgba(245,200,66,.15);}
+.b-match:hover{box-shadow:0 4px 16px rgba(245,200,66,.12);}
+.b-match.gold-card{box-shadow:0 0 16px rgba(245,200,66,.2);}
 .b-match.gold-card::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;background:linear-gradient(var(--gold),var(--gold2));}
 /* right-side matches: accent on right */
 .b-match.right-accent::after{content:'';position:absolute;right:0;top:0;bottom:0;width:3px;background:linear-gradient(var(--gold),var(--gold2));}
@@ -345,8 +345,8 @@ body{background:var(--bg);color:var(--text);font-family:'Barlow',sans-serif;min-
 /* stat cards row */
 .lb-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:24px;}
 .lb-stat-card{
-  background:var(--surface);border:1px solid var(--border);border-radius:12px;
-  padding:16px 18px;position:relative;overflow:hidden;box-shadow:var(--shadow);
+  background:var(--surface);border-radius:12px;
+  padding:16px 18px;position:relative;overflow:hidden;box-shadow:0 2px 20px rgba(0,0,0,.25);
 }
 .lb-stat-card::after{content:'';position:absolute;top:0;left:0;right:0;height:3px;}
 .lb-stat-card.gc::after{background:linear-gradient(90deg,var(--gold),var(--gold2));}
@@ -388,9 +388,9 @@ body{background:var(--bg);color:var(--text);font-family:'Barlow',sans-serif;min-
   width:100%;border-radius:10px 10px 0 0;
   display:flex;flex-direction:column;align-items:center;padding:12px 8px 10px;margin-top:6px;
 }
-.p1 .podium-base{background:linear-gradient(135deg,rgba(245,200,66,.2),rgba(245,200,66,.05));border:1px solid rgba(245,200,66,.3);min-height:90px;}
-.p2 .podium-base{background:linear-gradient(135deg,rgba(229,231,235,.1),rgba(229,231,235,.03));border:1px solid rgba(229,231,235,.2);min-height:70px;}
-.p3 .podium-base{background:linear-gradient(135deg,rgba(205,127,50,.1),rgba(205,127,50,.03));border:1px solid rgba(205,127,50,.2);min-height:60px;}
+.p1 .podium-base{background:linear-gradient(135deg,rgba(245,200,66,.15),rgba(245,200,66,.04));min-height:90px;}
+.p2 .podium-base{background:linear-gradient(135deg,rgba(229,231,235,.08),rgba(229,231,235,.02));min-height:70px;}
+.p3 .podium-base{background:linear-gradient(135deg,rgba(205,127,50,.08),rgba(205,127,50,.02));min-height:60px;}
 .podium-name{font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;text-transform:uppercase;color:var(--text);text-align:center;margin-top:4px;}
 .podium-team{font-family:'Barlow Condensed',sans-serif;font-size:10px;color:var(--muted);text-align:center;}
 .podium-goals{font-family:'Bebas Neue',sans-serif;font-size:28px;color:var(--gold);line-height:1;margin-top:4px;}
@@ -398,10 +398,10 @@ body{background:var(--bg);color:var(--text);font-family:'Barlow',sans-serif;min-
 .podium-goals-lbl{font-family:'Barlow Condensed',sans-serif;font-size:9px;letter-spacing:1px;text-transform:uppercase;color:var(--muted);}
 
 /* leaderboard list */
-.lb-list{background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden;box-shadow:var(--shadow);}
+.lb-list{background:var(--surface);border-radius:12px;overflow:hidden;box-shadow:0 2px 20px rgba(0,0,0,.25);}
 .lb-list-hdr{display:flex;align-items:center;padding:8px 16px;background:var(--surface2);border-bottom:1px solid var(--border);gap:12px;}
 .lb-hdr-col{font-family:'Barlow Condensed',sans-serif;font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);}
-.lb-row{display:flex;align-items:center;padding:11px 16px;border-bottom:1px solid var(--border);gap:12px;transition:background .15s;}
+.lb-row{display:flex;align-items:center;padding:11px 16px;border-bottom:1px solid rgba(255,255,255,.04);gap:12px;transition:background .15s;}
 .lb-row:last-child{border-bottom:none;}
 .lb-row:hover{background:var(--card-hover);}
 .lb-rank{font-family:'Bebas Neue',sans-serif;font-size:18px;width:28px;text-align:center;flex-shrink:0;color:var(--muted);}
@@ -427,14 +427,14 @@ body{background:var(--bg);color:var(--text);font-family:'Barlow',sans-serif;min-
 ════════════════════════════════════════ */
 .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:200;display:flex;align-items:center;justify-content:center;padding:16px;backdrop-filter:blur(8px);}
 .modal-overlay.hidden{display:none;}
-.modal{background:var(--surface);border:1px solid var(--border);border-radius:16px;width:100%;max-width:600px;max-height:90vh;overflow-y:auto;box-shadow:0 24px 60px rgba(0,0,0,.5);}
+.modal{background:var(--surface);border-radius:16px;width:100%;max-width:600px;max-height:90vh;overflow-y:auto;box-shadow:0 24px 60px rgba(0,0,0,.7);}
 .modal-hdr{
   background:linear-gradient(135deg,var(--bg2),var(--surface2));
   padding:16px 20px;border-bottom:1px solid var(--border);
   display:flex;align-items:center;justify-content:space-between;
   position:sticky;top:0;z-index:2;
 }
-.modal-close{background:var(--surface3);border:1px solid var(--border);color:var(--text2);width:30px;height:30px;border-radius:8px;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;transition:all .2s;}
+.modal-close{background:var(--surface3);color:var(--text2);width:30px;height:30px;border-radius:8px;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;transition:all .2s;}
 .modal-close:hover{background:var(--border);color:var(--text);}
 .modal-score-section{padding:20px;text-align:center;border-bottom:1px solid var(--border);}
 .modal-teams-row{display:flex;align-items:center;justify-content:center;gap:16px;margin-bottom:12px;}
@@ -448,7 +448,7 @@ body{background:var(--bg);color:var(--text);font-family:'Barlow',sans-serif;min-
 .modal-sec-title{font-family:'Barlow Condensed',sans-serif;font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid var(--border);}
 .ev-item{display:flex;align-items:center;gap:8px;font-family:'Barlow Condensed',sans-serif;font-size:12px;margin-bottom:6px;}
 .ev-item.away{flex-direction:row-reverse;}
-.ev-min{background:var(--surface2);border:1px solid var(--border);border-radius:5px;padding:2px 6px;font-size:10px;font-weight:700;color:var(--muted);flex-shrink:0;min-width:32px;text-align:center;}
+.ev-min{background:var(--surface2);border-radius:5px;padding:2px 6px;font-size:10px;font-weight:700;color:var(--muted);flex-shrink:0;min-width:32px;text-align:center;}
 .lineup-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;}
 .lp{font-family:'Barlow Condensed',sans-serif;font-size:11px;color:var(--text);padding:3px 0;border-bottom:1px solid var(--border);display:flex;gap:6px;}
 .lp:last-child{border-bottom:none;}
@@ -466,11 +466,11 @@ body{background:var(--bg);color:var(--text);font-family:'Barlow',sans-serif;min-
 .squad-pos-title{font-family:'Barlow Condensed',sans-serif;font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--gold);margin:12px 0 8px;}
 .squad-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;}
 .player-card{
-  background:var(--surface2);border:1px solid var(--border);border-radius:10px;
+  background:var(--surface2);border-radius:10px;
   padding:10px;display:flex;flex-direction:column;align-items:center;gap:6px;
-  transition:border-color .2s,transform .15s;text-align:center;
+  transition:box-shadow .2s,transform .15s;text-align:center;
 }
-.player-card:hover{border-color:rgba(245,200,66,.3);transform:translateY(-2px);}
+.player-card:hover{box-shadow:0 4px 16px rgba(245,200,66,.1);transform:translateY(-2px);}
 .player-card-photo{width:52px;height:52px;border-radius:50%;object-fit:cover;border:2px solid var(--border);background:var(--surface3);}
 .player-card-ph{width:52px;height:52px;border-radius:50%;background:var(--surface3);border:2px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:20px;}
 .player-num{font-family:'Bebas Neue',sans-serif;font-size:10px;color:var(--muted);}
@@ -762,18 +762,35 @@ function renderCal(){
   const sorted=Object.keys(days).sort();
   if(!sorted.length){el.innerHTML='';return;}
 
-  const monthLabel=new Date(sorted[0]+'T12:00:00').toLocaleDateString('en-US',{month:'long',year:'numeric'});
-  if(!ACTIVE_CAL_DATE) ACTIVE_CAL_DATE=sorted[0];
+  // Auto-select today if it has matches, otherwise nearest future date, else first date
+  if(!ACTIVE_CAL_DATE){
+    const todayKey = dayKey(new Date().toISOString());
+    if(days[todayKey]) ACTIVE_CAL_DATE = todayKey;
+    else {
+      const future = sorted.find(k => k >= todayKey);
+      ACTIVE_CAL_DATE = future || sorted[0];
+    }
+  }
+
+  // Group dates by month for the month label
+  const firstDate = new Date(sorted[0]+'T12:00:00Z');
+  const lastDate  = new Date(sorted[sorted.length-1]+'T12:00:00Z');
+  const monthLabel = firstDate.getMonth()===lastDate.getMonth()
+    ? firstDate.toLocaleDateString('en-US',{month:'long',year:'numeric'})
+    : `${firstDate.toLocaleDateString('en-US',{month:'short'})} – ${lastDate.toLocaleDateString('en-US',{month:'short',year:'numeric'})}`;
 
   const dayEls=sorted.map(k=>{
-    const d=new Date(k+'T12:00:00');
+    const d=new Date(k+'T12:00:00Z');
     const dow=d.toLocaleDateString('en-US',{weekday:'short'});
     const num=d.getDate();
+    const isToday = k === dayKey(new Date().toISOString());
     const active=k===ACTIVE_CAL_DATE?'active':'';
+    const todayMark = isToday ? `<span style="font-size:7px;letter-spacing:1px;font-family:Barlow Condensed;text-transform:uppercase;opacity:.7">TODAY</span>` : '';
     return `<div class="cal-day ${active} has-games" onclick="selectDay('${k}')" data-day="${k}">
       <span class="cal-dow">${dow}</span>
       <span class="cal-num">${num}</span>
       <span class="cal-dot"></span>
+      ${todayMark}
     </div>`;
   }).join('');
 
@@ -781,6 +798,12 @@ function renderCal(){
     <div class="cal-month">📅 ${monthLabel}</div>
     <div class="cal-days">${dayEls}</div>
   </div>`;
+
+  // Scroll active day into view
+  setTimeout(()=>{
+    const active=el.querySelector('.cal-day.active');
+    if(active) active.scrollIntoView({block:'nearest',inline:'center',behavior:'smooth'});
+  },100);
 }
 
 function selectDay(k){
@@ -1403,7 +1426,7 @@ function renderMatchModal(m, rich){
           const assists = s.goals?.assists||0;
           const rating = p.rating.toFixed(1);
           const rColor = p.rating>=8?'var(--green)':p.rating>=7?'var(--gold)':'var(--muted)';
-          return `<div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:8px 10px;display:flex;align-items:center;gap:8px;">
+          return `<div style="background:var(--surface2);border-radius:8px;padding:8px 10px;display:flex;align-items:center;gap:8px;">
             <img src="${p.player?.photo||''}" alt="" style="width:34px;height:34px;border-radius:50%;object-fit:cover;background:var(--surface3)" onerror="this.style.display='none'">
             <div style="flex:1;min-width:0">
               <div style="font-family:Barlow Condensed;font-size:12px;font-weight:700;text-transform:uppercase;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p.player?.name||'?'}</div>
