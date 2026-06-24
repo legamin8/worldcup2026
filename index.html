@@ -651,7 +651,13 @@ function dayKey(u){return new Date(u).toLocaleDateString('en-CA',{timeZone:'Afri
 
 function groupsByStage(s){
   const g={};
-  s.forEach(s=>{if(s.type!=='TOTAL'||!s.group)return;g[s.group.replace('GROUP_','')]=s.table;});
+  s.forEach(entry=>{
+    if(entry.type!=='TOTAL'||!entry.group)return;
+    // API returns either "GROUP_A" or "Group A" — normalise both to single letter
+    const raw = entry.group;
+    const letter = raw.replace('GROUP_','').replace('Group ','').trim();
+    g[letter]=entry.table;
+  });
   return g;
 }
 function isConfirmed(table){
