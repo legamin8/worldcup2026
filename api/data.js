@@ -184,7 +184,45 @@ export default async function handler(req, res) {
       return res.status(200).json({ ...squad, afTeams });
     }
 
-    // ── 5. SCORERS
+    // ── TEAM JOURNEY — all matches + stats for one team
+    if (type === 'teamjourney' && teamId) {
+      const id = parseInt(teamId);
+      // Fetch team matches from football-data.org
+      const [matchesRes, squadRes] = await Promise.allSettled([
+        fd(`/competitions/WC/matches?limit=200`),
+        fd(`/teams/${id}`),
+      ]);
+      const allMatches = matchesRes.status === 'fulfilled' ? matchesRes.value.matches : [];
+      const squadData  = squadRes.status  === 'fulfilled' ? squadRes.value : {};
+
+      // Filter matches involving this team
+      const teamMatches = allMatches.filter(m =>
+        m.homeTeam?.id === id || m.awayTeam?.id === id
+      ).sort((a, b) => new Date(a.utcDate) - new Date(b.utcDate));
+
+      // Build stats
+      let goalsFor = 0, goalsAgainst = 0, wins = 0, draws = 0, losses = 0;
+      const form = [];
+      teamMatches.forEach(m => {
+        if (m.status !== 'FINISHED') return;
+        const isHome = m.homeTeam?.id === id;
+        const gf = isHome ? (m.score?.fullTime?.home ?? 0) : (m.score?.fullTime?.away ?? 0);
+        const ga = isHome ? (m.score?.fullTime?.away ?? 0) : (m.score?.fullTime?.home ?? 0);
+        goalsFor += gf; goalsAgainst += ga;
+        if (gf > ga) { wins++; form.push('W'); }
+        else if (gf === ga) { draws++; form.push('D'); }
+        else { losses++; form.push('L'); }
+      });
+
+      res.setHeader('Cache-Control', 's-maxage=180, stale-while-revalidate=300');
+      return res.status(200).json({
+        team: squadData,
+        matches: teamMatches,
+        stats: { goalsFor, goalsAgainst, wins, draws, losses, played: wins+draws+losses, form },
+      });
+    }
+
+
     if (type === 'scorers') {
       const data = await fd(`/competitions/WC/scorers?limit=100`);
       res.setHeader('Cache-Control', 's-maxage=300, stale-while-revalidate=600');
