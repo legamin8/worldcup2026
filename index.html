@@ -612,6 +612,38 @@ function updateTs(){
 const tla=t=>t?.tla||t?.shortName||'';
 const flag=a=>FLAGS[a]||'🏳️';
 const fname=a=>NAMES[a]||a;
+
+// Robust flag lookup: tries tla first, then searches NAMES by team name
+function teamFlag(team){
+  if(!team) return '🏳️';
+  // Try direct tla match
+  if(team.tla && FLAGS[team.tla]) return FLAGS[team.tla];
+  // Try shortName as key
+  if(team.shortName && FLAGS[team.shortName]) return FLAGS[team.shortName];
+  // Try matching team name against NAMES values
+  const fullName = team.name||'';
+  const shortName = team.shortName||'';
+  for(const [abbr, name] of Object.entries(NAMES)){
+    if(name===fullName||name===shortName||fullName.includes(name)||shortName.includes(name)){
+      return FLAGS[abbr]||'🏳️';
+    }
+  }
+  return '🏳️';
+}
+// Same but returns the abbreviation
+function teamAbbr(team){
+  if(!team) return '';
+  if(team.tla && FLAGS[team.tla]) return team.tla;
+  if(team.shortName && FLAGS[team.shortName]) return team.shortName;
+  const fullName = team.name||'';
+  const shortName = team.shortName||'';
+  for(const [abbr, name] of Object.entries(NAMES)){
+    if(name===fullName||name===shortName||fullName.includes(name)||shortName.includes(name)){
+      return abbr;
+    }
+  }
+  return team.tla||team.shortName||'';
+}
 function shortDate(u){return new Date(u).toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric',timeZone:'Africa/Kigali'});}
 function catTime(u){return new Date(u).toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',hour12:false,timeZone:'Africa/Kigali'});}
 function longDate(u){return new Date(u).toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',timeZone:'Africa/Kigali'});}
@@ -626,7 +658,12 @@ function isConfirmed(table){
   const wm=table.map(t=>({...t,maxPts:t.points+(3-t.playedGames)*3}));
   const sorted=[...wm].sort((a,b)=>b.points-a.points);
   const thirdMax=sorted[2]?.maxPts??0;
-  const r={};sorted.forEach(t=>{r[tla(t.team)]=t.points>thirdMax;});return r;
+  const r={};
+  sorted.forEach(t=>{
+    const key=teamAbbr(t.team)||tla(t.team);
+    r[key]=t.points>thirdMax;
+  });
+  return r;
 }
 
 /* ════════════ RENDER ALL ════════════ */
@@ -659,9 +696,10 @@ function renderGroups(groups){
     const pill=upcoming>0?`${upcoming} upcoming`:`${played} played`;
 
     const teamRows=table.map((row,i)=>{
-      const a=tla(row.team);
+      const a=teamAbbr(row.team)||tla(row.team);
+      const fl=teamFlag(row.team);
       const isConf=conf[a]&&i<2;
-      const crest=row.team.crest?`<img class="team-crest" src="${row.team.crest}" alt="" onerror="this.style.display='none'">`:`<span class="team-crest-ph">${flag(a)}</span>`;
+      const crest=row.team.crest?`<img class="team-crest" src="${row.team.crest}" alt="" onerror="this.outerHTML='<span class=team-crest-ph>${fl}</span>'">`:`<span class="team-crest-ph">${fl}</span>`;
       return `<div class="team-row rank-${i+1}" onclick="openSquad(${row.team.id},'${row.team.name}','${row.team.crest||''}')">
         <div class="team-rank">${i+1}</div>
         <div class="qbar"></div>
@@ -827,8 +865,9 @@ function renderBracket(groups){
   function bTeam(r,isRight=false){
     const rtClass=isRight?'right-team':'';
     if(r.team){
-      const a=tla(r.team.team);
-      return`<div class="b-team conf ${rtClass}"><span class="bf">${flag(a)}</span><span>${r.team.team.shortName||r.team.team.name}</span></div>`;
+      const fl=teamFlag(r.team.team);
+      const nm=r.team.team?.shortName||r.team.team?.name||'';
+      return`<div class="b-team conf ${rtClass}"><span class="bf">${fl}</span><span>${nm}</span></div>`;
     }
     return`<div class="b-team tbd ${rtClass}">${r.label}</div>`;
   }
@@ -851,27 +890,36 @@ function renderBracket(groups){
   }
 
   // Group mini-card — shows current top 3 with live points
+  // groups[letter] = array of standings rows: {team:{id,name,shortName,tla,crest}, points, won, draw, lost, playedGames}
   function grpCard(letter){
-    const data=confirmed[letter];
-    // Build rows for positions 1, 2, 3
-    const rows=[];
+    // Pull directly from the raw groups object (sorted by API rank)
+    const table = groups[letter] || [];
+    // API already returns rows sorted by rank, but re-sort by points to be safe
+    const sorted = [...table].sort((a,b) => {
+      if(b.points !== a.points) return b.points - a.points;
+      const gdA = (a.goalsFor||0) - (a.goalsAgainst||0);
+      const gdB = (b.goalsFor||0) - (b.goalsAgainst||0);
+      return gdB - gdA;
+    });
+
+    const rows = [];
     for(let pos=0;pos<3;pos++){
-      const row=data?.teams?.[pos];
-      if(!row){
+      const row = sorted[pos];
+      if(!row || !row.team){
         rows.push(`<div class="grp-team pos-${pos+1}">
           <span class="grp-pos-num">${pos+1}</span>
-          <span class="gf" style="color:var(--muted)">❓</span>
-          <span class="grp-tname" style="color:var(--muted)">TBD</span>
+          <span class="gf" style="opacity:.4">❓</span>
+          <span class="grp-tname" style="opacity:.35">TBD</span>
         </div>`);
         continue;
       }
-      // row.team = {tla, name, shortName, crest, ...}
-      const a = row.team?.tla || row.team?.shortName || '';
-      const fl = flag(a);
-      const nm = row.team?.shortName || row.team?.name || a;
+      // team object from football-data.org: {id, name, shortName, tla, crest}
+      const team = row.team;
+      const abbr = teamAbbr(team);
+      const fl = teamFlag(team);
+      const nm = team.shortName || team.name || abbr;
       const pts = row.points ?? 0;
-      const posClass = pos===0?'pos-1':pos===1?'pos-2':'pos-3';
-      rows.push(`<div class="grp-team ${posClass}">
+      rows.push(`<div class="grp-team pos-${pos+1}">
         <span class="grp-pos-num">${pos+1}</span>
         <span class="gf">${fl}</span>
         <span class="grp-tname">${nm}</span>
