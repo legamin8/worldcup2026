@@ -104,62 +104,87 @@ export default async function handler(req, res) {
       return res.status(200).json(data);
     }
 
-    // ── 2. MATCH STATS — FAST PATH
-    // Strategy: search by date (1-2 AF requests) → find fixture by team name fuzzy match
-    // Handles CAT timezone offset: a match stored as June 23 UTC may appear as June 24 CAT
+    // ── 2. MATCH STATS — FAST PATH with extended date search
     if (type === 'matchstats') {
       if (!date || !home || !away) {
         return res.status(400).json({ error: 'date, home, away required' });
       }
 
-      // Build list of dates to try: the given date AND the day before
-      // This handles the case where the UTC date differs from the local display date
-      const prevDate = new Date(date + 'T12:00:00Z');
-      prevDate.setUTCDate(prevDate.getUTCDate() - 1);
-      const prevDateStr = prevDate.toISOString().slice(0, 10);
-      const datesToTry = [date, prevDateStr];
+      // Try 3 dates: given, day before, day after (handles UTC vs CAT drift both ways)
+      const baseDate = new Date(date + 'T12:00:00Z');
+      const prevDate = new Date(baseDate); prevDate.setUTCDate(baseDate.getUTCDate() - 1);
+      const nextDate = new Date(baseDate); nextDate.setUTCDate(baseDate.getUTCDate() + 1);
+      const datesToTry = [
+        date,
+        prevDate.toISOString().slice(0, 10),
+        nextDate.toISOString().slice(0, 10),
+      ];
+
+      const normHome = norm(home);
+      const normAway = norm(away);
+      // Extract first meaningful word (skip short words)
+      const hw = normHome.split(' ').find(w => w.length > 2) || normHome.split(' ')[0];
+      const aw = normAway.split(' ').find(w => w.length > 2) || normAway.split(' ')[0];
 
       let match = null;
-      for (const tryDate of datesToTry) {
-        const dayData = await af(
-          `/fixtures?league=${WC_AF.league}&season=${WC_AF.season}&date=${tryDate}`
-        );
-        const fixtures = dayData.response || [];
-        const normHome = norm(home);
-        const normAway = norm(away);
+      let allFixtures = [];
 
-        match = fixtures.find(f => {
-          const fh = norm(f.teams.home.name);
-          const fa = norm(f.teams.away.name);
-          // Exact normalised match first
-          if ((fh === normHome && fa === normAway) || (fh === normAway && fa === normHome)) return true;
-          // Partial first-word match as fallback
-          const hw = normHome.split(' ')[0];
-          const aw = normAway.split(' ')[0];
-          return (fh.includes(hw) && fa.includes(aw)) || (fh.includes(aw) && fa.includes(hw));
-        });
-        if (match) break;
+      for (const tryDate of datesToTry) {
+        try {
+          const dayData = await af(
+            `/fixtures?league=${WC_AF.league}&season=${WC_AF.season}&date=${tryDate}`
+          );
+          const fixtures = dayData.response || [];
+          allFixtures = [...allFixtures, ...fixtures];
+
+          match = fixtures.find(f => {
+            const fh = norm(f.teams.home.name);
+            const fa = norm(f.teams.away.name);
+            // 1. Exact normalised match
+            if ((fh === normHome && fa === normAway) || (fh === normAway && fa === normHome)) return true;
+            // 2. Both teams partially matched
+            if ((fh.includes(hw) && fa.includes(aw)) || (fh.includes(aw) && fa.includes(hw))) return true;
+            // 3. One team matches exactly, other matches first word
+            if (fh === normHome && fa.includes(aw)) return true;
+            if (fa === normAway && fh.includes(hw)) return true;
+            if (fh === normAway && fa.includes(hw)) return true;
+            if (fa === normHome && fh.includes(aw)) return true;
+            return false;
+          });
+          if (match) break;
+        } catch(e) { /* try next date */ }
       }
 
       if (!match) {
-        return res.status(200).json({ found: false, message: `No match found for ${home} vs ${away} on ${date} or ${prevDateStr}` });
+        // Return debug info so we can see what API-Football has
+        return res.status(200).json({
+          found: false,
+          message: `No match: ${home} vs ${away}`,
+          tried: datesToTry,
+          available: allFixtures.map(f => ({
+            date: f.fixture.date?.slice(0,10),
+            home: f.teams.home.name,
+            away: f.teams.away.name,
+            status: f.fixture.status.short,
+          })),
+        });
       }
 
       const afId = match.fixture.id;
       const isLive = ['1H','HT','2H','ET','BT','P'].includes(match.fixture.status.short);
+      const isFinished = match.fixture.status.short === 'FT';
 
-      // Fetch stats + players in parallel (2 simultaneous requests)
+      // Fetch stats + players in parallel
       const [statsRes, playersRes] = await Promise.allSettled([
         af(`/fixtures/statistics?fixture=${afId}`),
         af(`/fixtures/players?fixture=${afId}`),
       ]);
 
-
       const stats   = statsRes.status   === 'fulfilled' ? statsRes.value.response   : [];
       const players = playersRes.status === 'fulfilled' ? playersRes.value.response : [];
 
       res.setHeader('Cache-Control', isLive
-        ? 's-maxage=60,  stale-while-revalidate=90'
+        ? 's-maxage=60, stale-while-revalidate=90'
         : 's-maxage=7200, stale-while-revalidate=14400');
 
       return res.status(200).json({ found: true, afId, stats, players, fixture: match });
