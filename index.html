@@ -1477,8 +1477,17 @@ function renderBracket(groups){
   }));
 
   function r16Card(slotIdx, isRight=false) {
-    const apiM = r16All[slotIdx];
     const res  = r16Resolved[slotIdx];
+    // Find the API R16 match for this slot by matching expected teams
+    const homeTla = res?.home?.tla || '';
+    const awayTla = res?.away?.tla || '';
+    const apiM = r16All.find(m => {
+      const ha = m.homeTeam?.tla||''; const aa = m.awayTeam?.tla||'';
+      // Match if either team is found in the match (API may have only one team populated)
+      if(homeTla && (ha===homeTla||aa===homeTla)) return true;
+      if(awayTla && (ha===awayTla||aa===awayTla)) return true;
+      return false;
+    }) || null;
     const accent = isRight?'right-accent':'';
     const rt = isRight?'right-team':'';
 
