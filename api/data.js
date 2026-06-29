@@ -250,7 +250,7 @@ export default async function handler(req, res) {
 
     if (type === 'scorers') {
       const data = await fd(`/competitions/WC/scorers?limit=100`);
-      res.setHeader('Cache-Control', 's-maxage=300, stale-while-revalidate=600');
+      res.setHeader('Cache-Control', 's-maxage=60, stale-while-revalidate=30');
       return res.status(200).json(data);
     }
 
@@ -300,7 +300,8 @@ export default async function handler(req, res) {
       fd(`/competitions/WC/teams`),
     ]);
 
-    res.setHeader('Cache-Control', 's-maxage=180, stale-while-revalidate=300');
+    // Short cache during active tournament — 60s max age, no stale serving
+    res.setHeader('Cache-Control', 's-maxage=60, stale-while-revalidate=30');
     return res.status(200).json({
       standings:   standingsData.standings,
       season:      standingsData.season,
