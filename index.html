@@ -1291,54 +1291,130 @@ function renderBracket(groups){
     </div>`;
   }
 
-  // Build left R32 (M1-M8)
-  let lR32 = '';
-  for(let i=0;i<8;i++){
-    const p = CONFIRMED_R32?.[i];
-    if(p) lR32 += bMatch(p.h, p.ha, p.a, p.aa, p.lbl, false);
-    else {
-      const sorted = Object.values(groups).sort((a,b)=>0);
-      lR32 += tbdMatch(`M${i+1}`);
-    }
-    if(i<7) lR32 += `<div class="b-spacer" style="height:4px"></div>`;
+  // ── KNOCKOUT ROUND RENDERING FROM STATE.matches ──
+  // football-data.org returns KO matches with stage names and no group field
+  const koMatches = STATE.matches
+    .filter(m => !m.group)
+    .sort((a,b) => new Date(a.utcDate) - new Date(b.utcDate));
+
+  const byStage = {};
+  koMatches.forEach(m => {
+    const s = m.stage || 'UNKNOWN';
+    if(!byStage[s]) byStage[s] = [];
+    byStage[s].push(m);
+  });
+
+  // Build a slot from a KO match (shows teams + score if played)
+  function koMatchCard(m, isRight=false) {
+    if(!m) return tbdMatch('TBD', isRight);
+    const ht = m.homeTeam, at = m.awayTeam;
+    const htF = teamFlag(ht)||FLAGS[teamAbbr(ht)]||'🏳️';
+    const atF = teamFlag(at)||FLAGS[teamAbbr(at)]||'🏳️';
+    const htN = ht?.shortName||ht?.name||tla(ht)||'TBD';
+    const atN = at?.shortName||at?.name||tla(at)||'TBD';
+    const isFin = m.status==='FINISHED';
+    const isLive = m.status==='IN_PLAY'||m.status==='PAUSED';
+    const hs = m.score?.fullTime?.home;
+    const as_ = m.score?.fullTime?.away;
+
+    // Highlight winner
+    const hWin = isFin && hs > as_;
+    const aWin = isFin && as_ > hs;
+
+    const scoreTag = (isFin||isLive)
+      ? `<div class="b-lbl" style="color:${isLive?'var(--red)':'var(--muted)'}">
+          ${isLive?'● LIVE':''} ${hs??0}–${as_??0} ${m.score?.halfTime?.home!=null?`(HT: ${m.score.halfTime.home}-${m.score.halfTime.away})`:''}
+        </div>`
+      : `<div class="b-lbl">${catTime(m.utcDate)} CAT · ${shortDate(m.utcDate)}</div>`;
+
+    const accent = isRight ? 'right-accent' : '';
+    const border = isLive ? 'style="box-shadow:0 0 0 1px var(--red)"' : '';
+
+    const hClass = `b-team ${htN==='TBD'?'tbd':'conf'} ${isRight?'right-team':''} ${hWin?'style="color:var(--green)"':''}`;
+    const aClass = `b-team ${atN==='TBD'?'tbd':'conf'} ${isRight?'right-team':''} ${aWin?'style="color:var(--green)"':''}`;
+
+    return `<div class="b-match ${accent}" ${border} onclick="openMatch(${m.id})" style="cursor:pointer">
+      <div class="${hClass}"><span class="bf">${htF}</span><span>${htN}</span></div>
+      <div class="${aClass}"><span class="bf">${atF}</span><span>${atN}</span></div>
+      ${scoreTag}
+    </div>`;
   }
 
-  // Build right R32 (M9-M16)
-  let rR32 = '';
+  // Build R32 with scores overlaid on hardcoded pairings
+  // Use actual match data when available to show live scores
+  const r32MatchData = byStage['ROUND_OF_32'] || [];
+  function r32CardWithScore(p, idx, isRight=false) {
+    // Try to find the actual match in STATE.matches
+    const actualMatch = r32MatchData.find(m => {
+      const ha = teamAbbr(m.homeTeam)||tla(m.homeTeam);
+      const aa = teamAbbr(m.awayTeam)||tla(m.awayTeam);
+      return ha===p.ha||aa===p.aa||ha===p.aa||aa===p.ha;
+    });
+    if(actualMatch && (actualMatch.status==='FINISHED'||actualMatch.status==='IN_PLAY'||actualMatch.status==='PAUSED'||actualMatch.status==='TIMED'||actualMatch.status==='SCHEDULED')) {
+      return koMatchCard(actualMatch, isRight);
+    }
+    // Fallback: show confirmed teams without score
+    return bMatch(p.h, p.ha, p.a, p.aa, p.lbl, isRight);
+  }
+
+  // Rebuild R32 with live scores
+  lR32 = '';
+  for(let i=0;i<8;i++){
+    const p = CONFIRMED_R32?.[i];
+    if(p) lR32 += r32CardWithScore(p, i, false);
+    else lR32 += tbdMatch(`M${i+1}`);
+    if(i<7) lR32 += `<div class="b-spacer" style="height:4px"></div>`;
+  }
+  rR32 = '';
   for(let i=8;i<16;i++){
     const p = CONFIRMED_R32?.[i];
-    if(p) rR32 += bMatch(p.h, p.ha, p.a, p.aa, p.lbl, true);
+    if(p) rR32 += r32CardWithScore(p, i, true);
     else rR32 += tbdMatch(`M${i+1}`, true);
     if(i<15) rR32 += `<div class="b-spacer" style="height:4px"></div>`;
   }
 
-  // R16 — check STATE.matches for KO results
-  const r16Matches = STATE.matches.filter(m=>m.stage==='ROUND_OF_32'||m.group===null&&m.stage?.includes('32')).sort((a,b)=>new Date(a.utcDate)-new Date(b.utcDate));
-
-  const S = 70;
-  function koSlot(m, isRight=false) {
-    if(!m) return tbdSlot('TBD', isRight);
-    if(m.status==='FINISHED'){
-      const winner = m.score?.fullTime?.home > m.score?.fullTime?.away ? m.homeTeam : m.awayTeam;
-      const a = teamAbbr(winner)||tla(winner);
-      return `<div class="b-team conf ${isRight?'right-team':''}"><span class="bf">${teamFlag(winner)}</span><span>${winner?.shortName||winner?.name||a}</span></div>`;
-    }
-    if(m.status==='IN_PLAY'||m.status==='PAUSED'){
-      const ht=tla(m.homeTeam),at=tla(m.awayTeam);
-      return `<div class="b-team conf ${isRight?'right-team':''}" style="color:var(--red)"><span class="bf">●</span><span>${isRight?at:ht} ${m.score?.fullTime?.home??0}–${m.score?.fullTime?.away??0} ${isRight?ht:at}</span></div>`;
-    }
-    // Scheduled — show both teams if known
-    const ht=m.homeTeam,at=m.awayTeam;
-    const hf=teamFlag(ht),af=teamFlag(at);
-    return `<div class="b-team conf ${isRight?'right-team':''}"><span class="bf">${isRight?af:hf}</span><span>${isRight?(at?.shortName||tla(at)):(ht?.shortName||tla(ht))}</span></div>`;
+  // R16 — from actual match data
+  const r16Data = (byStage['ROUND_OF_16']||[]).sort((a,b)=>new Date(a.utcDate)-new Date(b.utcDate));
+  let lR16='', rR16='';
+  // Left: M1+M2→R16#1, M3+M4→R16#2, M5+M6→R16#3, M7+M8→R16#4
+  // Right: M9+M10→R16#5, M11+M12→R16#6, M13+M14→R16#7, M15+M16→R16#8
+  for(let i=0;i<4;i++){
+    const m = r16Data[i];
+    lR16 += m ? koMatchCard(m, false) : tbdMatch(`R16 #${i+1}`);
+    if(i<3) lR16 += `<div class="b-spacer" style="height:${S*0.9}px"></div>`;
+  }
+  for(let i=4;i<8;i++){
+    const m = r16Data[i];
+    rR16 += m ? koMatchCard(m, true) : tbdMatch(`R16 #${i+1}`, true);
+    if(i<7) rR16 += `<div class="b-spacer" style="height:${S*0.9}px"></div>`;
   }
 
-  let lR16='',rR16='';
-  for(let i=0;i<4;i++){lR16+=tbdMatch(`R16 #${i+1}`);if(i<3)lR16+=`<div class="b-spacer" style="height:${S*0.9}px"></div>`;}
-  for(let i=0;i<4;i++){rR16+=tbdMatch(`R16 #${i+5}`,true);if(i<3)rR16+=`<div class="b-spacer" style="height:${S*0.9}px"></div>`;}
-  let lQF='',rQF='';
-  [0,1].forEach(i=>{lQF+=tbdMatch(`QF ${i+1}`);if(i===0)lQF+=`<div class="b-spacer" style="height:${S*2.8}px"></div>`;});
-  [0,1].forEach(i=>{rQF+=tbdMatch(`QF ${i+3}`,true);if(i===0)rQF+=`<div class="b-spacer" style="height:${S*2.8}px"></div>`;});
+  // QF
+  const qfData = (byStage['QUARTER_FINALS']||[]).sort((a,b)=>new Date(a.utcDate)-new Date(b.utcDate));
+  let lQF='', rQF='';
+  [0,1].forEach(i=>{
+    const m = qfData[i];
+    lQF += m ? koMatchCard(m, false) : tbdMatch(`QF ${i+1}`);
+    if(i===0) lQF += `<div class="b-spacer" style="height:${S*2.8}px"></div>`;
+  });
+  [2,3].forEach((idx,i)=>{
+    const m = qfData[idx];
+    rQF += m ? koMatchCard(m, true) : tbdMatch(`QF ${idx+1}`, true);
+    if(i===0) rQF += `<div class="b-spacer" style="height:${S*2.8}px"></div>`;
+  });
+
+  // SF
+  const sfData = (byStage['SEMI_FINALS']||[]).sort((a,b)=>new Date(a.utcDate)-new Date(b.utcDate));
+  const lSF = sfData[0] ? koMatchCard(sfData[0], false) : tbdMatch('SF 1');
+  const rSF = sfData[1] ? koMatchCard(sfData[1], true)  : tbdMatch('SF 2', true);
+
+  // Final + 3rd
+  const finalData = byStage['FINAL']?.[0];
+  const thirdData = byStage['3RD_PLACE_PLAY_OFF']?.[0];
+  const finalCard = finalData ? koMatchCard(finalData, false) : `<div class="b-match gold-card"><div class="b-team tbd">Winner SF 1</div><div class="b-team tbd">Winner SF 2</div><div class="b-lbl">🏆 Final · Jul 19</div></div>`;
+  const bronzeCard = thirdData ? koMatchCard(thirdData, false) : `<div class="b-match"><div class="b-team tbd">Loser SF 1</div><div class="b-team tbd">Loser SF 2</div><div class="b-lbl">Bronze · Jul 18</div></div>`;
+
+  const S2 = S; // alias
 
   // Group mini-cards for bracket sides
   function grpCard(letter){
@@ -1381,18 +1457,18 @@ function renderBracket(groups){
       <div class="b-col" style="min-width:148px;padding-top:28px"><div class="b-round-hdr">Round of 32</div>${lR32}</div>
       <div class="b-col" style="min-width:140px;padding-top:${S*0.5}px"><div class="b-round-hdr">Round of 16</div>${lR16}</div>
       <div class="b-col" style="min-width:138px;padding-top:${S*1.9}px"><div class="b-round-hdr">Quarter Finals</div>${lQF}</div>
-      <div class="b-col" style="min-width:135px;padding-top:${S*4.8}px"><div class="b-round-hdr">Semi Finals</div>${tbdMatch('SF 1')}</div>
+      <div class="b-col" style="min-width:135px;padding-top:${S*4.8}px"><div class="b-round-hdr">Semi Finals</div>${lSF}</div>
       <div class="b-col" style="min-width:128px;padding-top:${S*3}px">
         <div class="b-round-hdr" style="border-top-color:#E6A800">The Final</div>
-        <div class="b-match gold-card"><div class="b-team tbd">Winner SF 1</div><div class="b-team tbd">Winner SF 2</div><div class="b-lbl">🏆 Final · Jul 19</div></div>
+        ${finalCard}
         <div class="b-round-hdr" style="border-top-color:#22C55E;margin-top:16px">3rd Place</div>
-        <div class="b-match"><div class="b-team tbd">Loser SF 1</div><div class="b-team tbd">Loser SF 2</div><div class="b-lbl">Bronze · Jul 18</div></div>
+        ${bronzeCard}
       </div>
       <div class="b-center" style="padding-top:${S*2.5}px">
         <div style="font-size:36px;filter:drop-shadow(0 0 16px rgba(245,200,66,.5))">🏆</div>
         <div style="font-family:'Bebas Neue',sans-serif;font-size:11px;letter-spacing:0.1em;color:var(--gold);text-align:center;margin-top:4px">Champion</div>
       </div>
-      <div class="b-col" style="min-width:135px;padding-top:${S*4.8}px"><div class="b-round-hdr">Semi Finals</div>${tbdMatch('SF 2',true)}</div>
+      <div class="b-col" style="min-width:135px;padding-top:${S*4.8}px"><div class="b-round-hdr">Semi Finals</div>${rSF}</div>
       <div class="b-col" style="min-width:138px;padding-top:${S*1.9}px"><div class="b-round-hdr">Quarter Finals</div>${rQF}</div>
       <div class="b-col" style="min-width:140px;padding-top:${S*0.5}px"><div class="b-round-hdr">Round of 16</div>${rR16}</div>
       <div class="b-col" style="min-width:148px;padding-top:28px"><div class="b-round-hdr">Round of 32</div>${rR32}</div>
