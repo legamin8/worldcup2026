@@ -1296,18 +1296,19 @@ function renderBracket(groups){
   // football-data.org KO matches have no group field (null/undefined)
   // Stage names vary: ROUND_OF_32, LAST_32, ROUND_OF_16, LAST_16, etc.
   const KO_STAGE_MAP = {
-    // football-data.org stage names → normalized
-    'ROUND_OF_32':      'R32',
-    'LAST_32':          'R32',
-    'ROUND_OF_16':      'R16',
-    'LAST_16':          'R16',
-    'QUARTER_FINALS':   'QF',
-    'QUARTER_FINAL':    'QF',
-    'SEMI_FINALS':      'SF',
-    'SEMI_FINAL':       'SF',
-    'FINAL':            'FINAL',
+    'ROUND_OF_32':        'R32',
+    'LAST_32':            'R32',
+    'ROUND_OF_16':        'R16',
+    'LAST_16':            'R16',
+    'QUARTER_FINALS':     'QF',
+    'QUARTER_FINAL':      'QF',
+    'SEMI_FINALS':        'SF',
+    'SEMI_FINAL':         'SF',
+    'FINAL':              'FINAL',
     '3RD_PLACE_PLAY_OFF': 'THIRD',
-    'THIRD_PLACE':      'THIRD',
+    'THIRD_PLACE_PLAY_OFF':'THIRD',
+    'THIRD_PLACE':        'THIRD',
+    'PLAY_OFF_FOR_THIRD_PLACE':'THIRD',
   };
 
   // Filter KO matches — no group field means KO stage
@@ -1405,44 +1406,66 @@ function renderBracket(groups){
     if(i<15) rR32 += `<div class="b-spacer" style="height:4px"></div>`;
   }
 
-  // R16 — from actual match data
-  const r16Data = stageMatches('R16');
+  // R16 — split into left (matches involving M1-M8 winners) and right (M9-M16 winners)
+  // Left R16 teams: MEX,ECU,BRA,JPN,GER,PAR,NED,MAR,FRA,SWE,COL,GHA,SUI,DZA,ENG,COD
+  // Right R16 teams: USA,BIH,BEL,SEN,RSA,CAN,CIV,NOR,ESP,AUT,POR,CRO,ARG,CPV,AUS,EGY
+  const LEFT_TEAMS  = new Set(['MEX','ECU','BRA','JPN','GER','PAR','NED','MAR','FRA','SWE','COL','GHA','SUI','DZA','ENG','COD']);
+  const RIGHT_TEAMS = new Set(['USA','BIH','BEL','SEN','RSA','CAN','CIV','NOR','ESP','AUT','POR','CRO','ARG','CPV','AUS','EGY']);
+
+  function isLeftMatch(m) {
+    const ha = teamAbbr(m.homeTeam)||tla(m.homeTeam);
+    const aa = teamAbbr(m.awayTeam)||tla(m.awayTeam);
+    // A match belongs to the left side if either team came from M1-M8
+    return LEFT_TEAMS.has(ha) || LEFT_TEAMS.has(aa);
+  }
+
+  const r16All = stageMatches('R16');
+  const r16Left  = r16All.filter(m => isLeftMatch(m)).sort((a,b)=>new Date(a.utcDate)-new Date(b.utcDate));
+  const r16Right = r16All.filter(m => !isLeftMatch(m)).sort((a,b)=>new Date(a.utcDate)-new Date(b.utcDate));
+
   let lR16='', rR16='';
   for(let i=0;i<4;i++){
-    const m = r16Data[i];
+    const m = r16Left[i];
     lR16 += m ? koMatchCard(m, false) : tbdMatch(`R16 #${i+1}`);
     if(i<3) lR16 += `<div class="b-spacer" style="height:${S*0.9}px"></div>`;
   }
-  for(let i=4;i<8;i++){
-    const m = r16Data[i];
-    rR16 += m ? koMatchCard(m, true) : tbdMatch(`R16 #${i+1}`, true);
-    if(i<7) rR16 += `<div class="b-spacer" style="height:${S*0.9}px"></div>`;
+  for(let i=0;i<4;i++){
+    const m = r16Right[i];
+    rR16 += m ? koMatchCard(m, true) : tbdMatch(`R16 #${i+5}`, true);
+    if(i<3) rR16 += `<div class="b-spacer" style="height:${S*0.9}px"></div>`;
   }
 
-  // QF
-  const qfData = stageMatches('QF');
+  // QF — same left/right split logic
+  const qfAll = stageMatches('QF');
+  const qfLeft  = qfAll.filter(m => isLeftMatch(m)).sort((a,b)=>new Date(a.utcDate)-new Date(b.utcDate));
+  const qfRight = qfAll.filter(m => !isLeftMatch(m)).sort((a,b)=>new Date(a.utcDate)-new Date(b.utcDate));
+
   let lQF='', rQF='';
   [0,1].forEach(i=>{
-    const m = qfData[i];
+    const m = qfLeft[i];
     lQF += m ? koMatchCard(m, false) : tbdMatch(`QF ${i+1}`);
     if(i===0) lQF += `<div class="b-spacer" style="height:${S*2.8}px"></div>`;
   });
-  [2,3].forEach((idx,i)=>{
-    const m = qfData[idx];
-    rQF += m ? koMatchCard(m, true) : tbdMatch(`QF ${idx+1}`, true);
+  [0,1].forEach(i=>{
+    const m = qfRight[i];
+    rQF += m ? koMatchCard(m, true) : tbdMatch(`QF ${i+3}`, true);
     if(i===0) rQF += `<div class="b-spacer" style="height:${S*2.8}px"></div>`;
   });
 
-  // SF
-  const sfData = stageMatches('SF');
-  const lSF = sfData[0] ? koMatchCard(sfData[0], false) : tbdMatch('SF 1');
-  const rSF = sfData[1] ? koMatchCard(sfData[1], true)  : tbdMatch('SF 2', true);
+  // SF — first 2 matches chronologically go left/right
+  const sfAll = stageMatches('SF').sort((a,b)=>new Date(a.utcDate)-new Date(b.utcDate));
+  const lSF = sfAll[0] ? koMatchCard(sfAll[0], false) : tbdMatch('SF 1');
+  const rSF = sfAll[1] ? koMatchCard(sfAll[1], true)  : tbdMatch('SF 2', true);
 
   // Final + 3rd
   const finalData = stageMatches('FINAL')[0];
   const thirdData = stageMatches('THIRD')[0];
-  const finalCard = finalData ? koMatchCard(finalData, false) : `<div class="b-match gold-card"><div class="b-team tbd">Winner SF 1</div><div class="b-team tbd">Winner SF 2</div><div class="b-lbl">🏆 Final · Jul 19</div></div>`;
-  const bronzeCard = thirdData ? koMatchCard(thirdData, false) : `<div class="b-match"><div class="b-team tbd">Loser SF 1</div><div class="b-team tbd">Loser SF 2</div><div class="b-lbl">Bronze · Jul 18</div></div>`;
+  const finalCard = finalData
+    ? koMatchCard(finalData, false)
+    : `<div class="b-match gold-card"><div class="b-team tbd">Winner SF 1</div><div class="b-team tbd">Winner SF 2</div><div class="b-lbl">🏆 Final · Jul 19</div></div>`;
+  const bronzeCard = thirdData
+    ? koMatchCard(thirdData, false)
+    : `<div class="b-match"><div class="b-team tbd">Loser SF 1</div><div class="b-team tbd">Loser SF 2</div><div class="b-lbl">Bronze · Jul 18</div></div>`;
 
   // S already declared at top of function
 
