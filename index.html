@@ -1433,8 +1433,21 @@ function renderBracket(groups){
   }
 
   const r16All = stageMatches('R16');
-  const r16Left  = r16All.filter(m => isLeftMatch(m)).sort((a,b)=>new Date(a.utcDate)-new Date(b.utcDate));
-  const r16Right = r16All.filter(m => !isLeftMatch(m)).sort((a,b)=>new Date(a.utcDate)-new Date(b.utcDate));
+  const qfAll  = stageMatches('QF');
+
+  // Debug info for bracket note
+  const r16Debug = r16All.map(m=>`${m.homeTeam?.tla||'?'}v${m.awayTeam?.tla||'?'}(${m.status})`).join(', ');
+
+  // ── SIMPLE APPROACH: don't try to split left/right by team name.
+  // Instead, show ALL R16 matches on BOTH sides based on chronological order.
+  // First 4 → left bracket, last 4 → right bracket (FIFA scheduling puts left-side matches first)
+  // This is more reliable than fuzzy team matching.
+  const r16Left  = r16All.slice(0, 4);
+  const r16Right = r16All.slice(4, 8);
+
+  const qfLeft  = qfAll.slice(0, 2);
+  const qfRight = qfAll.slice(2, 4);
+
 
   let lR16='', rR16='';
   for(let i=0;i<4;i++){
@@ -1448,11 +1461,7 @@ function renderBracket(groups){
     if(i<3) rR16 += `<div class="b-spacer" style="height:${S*0.9}px"></div>`;
   }
 
-  // QF — same left/right split logic
-  const qfAll = stageMatches('QF');
-  const qfLeft  = qfAll.filter(m => isLeftMatch(m)).sort((a,b)=>new Date(a.utcDate)-new Date(b.utcDate));
-  const qfRight = qfAll.filter(m => !isLeftMatch(m)).sort((a,b)=>new Date(a.utcDate)-new Date(b.utcDate));
-
+  // QF — first 2 chronologically → left, last 2 → right
   let lQF='', rQF='';
   [0,1].forEach(i=>{
     const m = qfLeft[i];
@@ -1512,7 +1521,7 @@ function renderBracket(groups){
   rightGrps.forEach((l,i)=>{rGrpHtml+=grpCard(l);if(i<5)rGrpHtml+=`<div class="grp-spacer" style="height:${S*0.45}px"></div>`;});
 
   const stageDebug = Object.keys(byStage).length
-    ? `<br><span style="font-size:10px;color:var(--text3)">API stages: ${Object.entries(byStage).map(([k,v])=>`${k}(${v.length})`).join(', ')}</span>`
+    ? `<br><span style="font-size:10px;color:var(--text3)">API stages: ${Object.entries(byStage).map(([k,v])=>`${k}(${v.length})`).join(', ')} | R16: ${r16Debug||'none'}</span>`
     : '<br><span style="font-size:10px;color:var(--red)">⚠ No KO matches found in API yet</span>';
 
   const statusMsg = allGroupsDone
