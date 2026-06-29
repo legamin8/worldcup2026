@@ -1,6 +1,13 @@
 // ═══════════════════════════════════════════════════════
 //  Primary:  football-data.org  (standings, fixtures, scorers)
 //  Stats:    api-football        (match stats, player stats)
+//
+//  football-data.org FREE TIER: 10 requests/minute
+//  Strategy:
+//  - Default endpoint: 2 calls (standings+matches combined) — was 3
+//  - Cache 5 minutes during KO stage (results don't update every second)
+//  - stale-while-revalidate: serve cached data while refreshing in bg
+//  - Retry once on 429 with 20s delay
 // ═══════════════════════════════════════════════════════
 
 const FD_KEY  = process.env.FOOTBALL_DATA_API_KEY;
@@ -9,13 +16,27 @@ const FD_BASE = 'https://api.football-data.org/v4';
 const AF_BASE = 'https://v3.football.api-sports.io';
 const WC_AF   = { league: 1, season: 2026 };
 
-// ── fetch helpers ────────────────────────────────────────
-async function fd(path) {
+// ── fetch with retry on 429 ──────────────────────────────
+async function fdFetch(path) {
   const r = await fetch(`${FD_BASE}${path}`, {
     headers: { 'X-Auth-Token': FD_KEY },
   });
+  if (r.status === 429) {
+    // Wait 20s and retry once
+    await new Promise(res => setTimeout(res, 20000));
+    const r2 = await fetch(`${FD_BASE}${path}`, {
+      headers: { 'X-Auth-Token': FD_KEY },
+    });
+    if (!r2.ok) throw new Error(`FD ${path} → ${r2.status}: ${await r2.text()}`);
+    return r2.json();
+  }
   if (!r.ok) throw new Error(`FD ${path} → ${r.status}: ${await r.text()}`);
   return r.json();
+}
+
+// Sequential fd calls to avoid bursting rate limit
+async function fd(path) {
+  return fdFetch(path);
 }
 
 async function af(path) {
@@ -250,7 +271,8 @@ export default async function handler(req, res) {
 
     if (type === 'scorers') {
       const data = await fd(`/competitions/WC/scorers?limit=100`);
-      res.setHeader('Cache-Control', 's-maxage=60, stale-while-revalidate=30');
+      // Cache 10 minutes — scorer rankings don't change match-to-match
+      res.setHeader('Cache-Control', 's-maxage=600, stale-while-revalidate=120');
       return res.status(200).json(data);
     }
 
@@ -293,20 +315,21 @@ export default async function handler(req, res) {
       return res.status(200).json({ scorers: merged });
     }
 
-    // ── 7. DEFAULT — standings + matches + teams
-    const [standingsData, matchesData, teamsData] = await Promise.all([
-      fd(`/competitions/WC/standings`),
-      fd(`/competitions/WC/matches?limit=200`),
-      fd(`/competitions/WC/teams`),
-    ]);
+    // ── 7. DEFAULT — standings + matches (2 calls, sequential to respect rate limit)
+    // Teams data removed — crests come from standings rows which include team.crest
+    // Sequential (not parallel) to stay under 10 req/min free tier
+    const standingsData = await fd(`/competitions/WC/standings`);
+    const matchesData   = await fd(`/competitions/WC/matches?limit=200`);
 
-    // Short cache during active tournament — 60s max age, no stale serving
-    res.setHeader('Cache-Control', 's-maxage=60, stale-while-revalidate=30');
+    // KO stage: cache 5 minutes — results don't change every second
+    // stale-while-revalidate: serve cached while refreshing in background
+    // This means a visitor gets instant response and background refresh handles freshness
+    res.setHeader('Cache-Control', 's-maxage=300, stale-while-revalidate=60');
     return res.status(200).json({
       standings:   standingsData.standings,
       season:      standingsData.season,
       matches:     matchesData.matches,
-      teams:       teamsData.teams,
+      teams:       [], // crests available via standings[].table[].team.crest
       lastUpdated: new Date().toISOString(),
     });
 

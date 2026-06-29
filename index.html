@@ -964,8 +964,8 @@ async function loadAll(){
   try{
     showLoading();
     const [main,sc]=await Promise.all([
-      fetch('/api/data?v='+Date.now()).then(r=>r.json()),
-      fetch('/api/data?type=scorers&v='+Date.now()).then(r=>r.json()),
+      fetch('/api/data').then(r=>r.json()),
+      fetch('/api/data?type=scorers').then(r=>r.json()),
     ]);
     if(main.error) throw new Error(main.error);
     STATE.standings=main.standings||[];
@@ -2082,7 +2082,7 @@ function showTab(tab,btn){
 /* ════════ BOOT ════════ */
 initTheme();
 loadAll();
-setInterval(loadAll, 90*1000); // 90s refresh during active tournament
+setInterval(loadAll, 5*60*1000); // 5min refresh — matches KO stage cache TTL
 setInterval(()=>{
   if(!STATE.lastUpdated)return;
   const mins=Math.round((Date.now()-STATE.lastUpdated)/60000);
