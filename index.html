@@ -1293,17 +1293,48 @@ function renderBracket(groups){
   }
 
   // ── KNOCKOUT ROUND RENDERING FROM STATE.matches ──
-  // football-data.org returns KO matches with stage names and no group field
+  // football-data.org KO matches have no group field (null/undefined)
+  // Stage names vary: ROUND_OF_32, LAST_32, ROUND_OF_16, LAST_16, etc.
+  const KO_STAGE_MAP = {
+    // football-data.org stage names → normalized
+    'ROUND_OF_32':      'R32',
+    'LAST_32':          'R32',
+    'ROUND_OF_16':      'R16',
+    'LAST_16':          'R16',
+    'QUARTER_FINALS':   'QF',
+    'QUARTER_FINAL':    'QF',
+    'SEMI_FINALS':      'SF',
+    'SEMI_FINAL':       'SF',
+    'FINAL':            'FINAL',
+    '3RD_PLACE_PLAY_OFF': 'THIRD',
+    'THIRD_PLACE':      'THIRD',
+  };
+
+  // Filter KO matches — no group field means KO stage
   const koMatches = STATE.matches
+    .filter(m => !m.group && m.stage && m.stage !== 'GROUP_STAGE')
+    .sort((a,b) => new Date(a.utcDate) - new Date(b.utcDate));
+
+  // Also include ALL non-group matches as fallback
+  const allNonGroup = STATE.matches
     .filter(m => !m.group)
     .sort((a,b) => new Date(a.utcDate) - new Date(b.utcDate));
 
   const byStage = {};
-  koMatches.forEach(m => {
-    const s = m.stage || 'UNKNOWN';
-    if(!byStage[s]) byStage[s] = [];
-    byStage[s].push(m);
+  const byNorm = {}; // normalized stage buckets
+  allNonGroup.forEach(m => {
+    const raw = m.stage || 'UNKNOWN';
+    if(!byStage[raw]) byStage[raw] = [];
+    byStage[raw].push(m);
+    const norm = KO_STAGE_MAP[raw] || raw;
+    if(!byNorm[norm]) byNorm[norm] = [];
+    byNorm[norm].push(m);
   });
+
+  // Helper: get matches for a stage, trying both raw and normalized names
+  function stageMatches(normKey) {
+    return byNorm[normKey] || byStage[normKey] || [];
+  }
 
   // Build a slot from a KO match (shows teams + score if played)
   function koMatchCard(m, isRight=false) {
@@ -1342,8 +1373,8 @@ function renderBracket(groups){
   }
 
   // Build R32 with scores overlaid on hardcoded pairings
-  // Use actual match data when available to show live scores
-  const r32MatchData = byStage['ROUND_OF_32'] || [];
+  const r32MatchData = stageMatches('R32');
+
   function r32CardWithScore(p, idx, isRight=false) {
     // Try to find the actual match in STATE.matches
     const actualMatch = r32MatchData.find(m => {
@@ -1375,10 +1406,8 @@ function renderBracket(groups){
   }
 
   // R16 — from actual match data
-  const r16Data = (byStage['ROUND_OF_16']||[]).sort((a,b)=>new Date(a.utcDate)-new Date(b.utcDate));
+  const r16Data = stageMatches('R16');
   let lR16='', rR16='';
-  // Left: M1+M2→R16#1, M3+M4→R16#2, M5+M6→R16#3, M7+M8→R16#4
-  // Right: M9+M10→R16#5, M11+M12→R16#6, M13+M14→R16#7, M15+M16→R16#8
   for(let i=0;i<4;i++){
     const m = r16Data[i];
     lR16 += m ? koMatchCard(m, false) : tbdMatch(`R16 #${i+1}`);
@@ -1391,7 +1420,7 @@ function renderBracket(groups){
   }
 
   // QF
-  const qfData = (byStage['QUARTER_FINALS']||[]).sort((a,b)=>new Date(a.utcDate)-new Date(b.utcDate));
+  const qfData = stageMatches('QF');
   let lQF='', rQF='';
   [0,1].forEach(i=>{
     const m = qfData[i];
@@ -1405,13 +1434,13 @@ function renderBracket(groups){
   });
 
   // SF
-  const sfData = (byStage['SEMI_FINALS']||[]).sort((a,b)=>new Date(a.utcDate)-new Date(b.utcDate));
+  const sfData = stageMatches('SF');
   const lSF = sfData[0] ? koMatchCard(sfData[0], false) : tbdMatch('SF 1');
   const rSF = sfData[1] ? koMatchCard(sfData[1], true)  : tbdMatch('SF 2', true);
 
   // Final + 3rd
-  const finalData = byStage['FINAL']?.[0];
-  const thirdData = byStage['3RD_PLACE_PLAY_OFF']?.[0];
+  const finalData = stageMatches('FINAL')[0];
+  const thirdData = stageMatches('THIRD')[0];
   const finalCard = finalData ? koMatchCard(finalData, false) : `<div class="b-match gold-card"><div class="b-team tbd">Winner SF 1</div><div class="b-team tbd">Winner SF 2</div><div class="b-lbl">🏆 Final · Jul 19</div></div>`;
   const bronzeCard = thirdData ? koMatchCard(thirdData, false) : `<div class="b-match"><div class="b-team tbd">Loser SF 1</div><div class="b-team tbd">Loser SF 2</div><div class="b-lbl">Bronze · Jul 18</div></div>`;
 
@@ -1446,9 +1475,13 @@ function renderBracket(groups){
   leftGrps.forEach((l,i)=>{lGrpHtml+=grpCard(l);if(i<5)lGrpHtml+=`<div class="grp-spacer" style="height:${S*0.45}px"></div>`;});
   rightGrps.forEach((l,i)=>{rGrpHtml+=grpCard(l);if(i<5)rGrpHtml+=`<div class="grp-spacer" style="height:${S*0.45}px"></div>`;});
 
+  const stageDebug = Object.keys(byStage).length
+    ? `<br><span style="font-size:10px;color:var(--text3)">API stages: ${Object.entries(byStage).map(([k,v])=>`${k}(${v.length})`).join(', ')}</span>`
+    : '<br><span style="font-size:10px;color:var(--red)">⚠ No KO matches found in API yet</span>';
+
   const statusMsg = allGroupsDone
-    ? `<strong style="color:var(--green)">Group stage complete</strong> — All 32 teams confirmed for Round of 32. Click any fixture to view match stats.`
-    : `<strong style="color:var(--gold)">Group stage in progress</strong> — Confirmed qualifiers show flag & name. Best 3rd place spots shown in <span style="color:var(--green)">green ✓</span>.`;
+    ? `<strong style="color:var(--green)">Group stage complete</strong> — All 32 teams confirmed. Click any match to view stats.${stageDebug}`
+    : `<strong style="color:var(--gold)">Group stage in progress</strong> — Confirmed qualifiers show flag & name.${stageDebug}`;
 
   el.innerHTML=`
     <div class="bracket-note">${statusMsg}</div>
