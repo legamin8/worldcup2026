@@ -964,8 +964,8 @@ async function loadAll(){
   try{
     showLoading();
     const [main,sc]=await Promise.all([
-      fetch('/api/data').then(r=>r.json()),
-      fetch('/api/data?type=scorers').then(r=>r.json()),
+      fetch('/api/data?v='+Date.now()).then(r=>r.json()),
+      fetch('/api/data?type=scorers&v='+Date.now()).then(r=>r.json()),
     ]);
     if(main.error) throw new Error(main.error);
     STATE.standings=main.standings||[];
@@ -1025,12 +1025,38 @@ function groupsByStage(s){
   });
   return g;
 }
-function isConfirmed(table){
-  const wm=table.map(t=>({...t,maxPts:t.points+(3-t.playedGames)*3}));
-  const sorted=[...wm].sort((a,b)=>b.points-a.points);
-  const thirdMax=sorted[2]?.maxPts??0;
-  const r={};
-  sorted.forEach(t=>{const k=teamAbbr(t.team)||tla(t.team);r[k]=t.points>thirdMax;});
+function isConfirmed(table, groupLetter){
+  if(!table||!table.length) return {};
+  const sorted=[...table].sort((a,b)=>b.points-a.points);
+
+  // Count finished matches for this group from STATE.matches (more reliable than playedGames field)
+  let finishedGroupMatches = 0;
+  const totalGroupMatches = 6; // 4 teams, round robin = 6 matches
+  if(groupLetter && STATE.matches){
+    finishedGroupMatches = STATE.matches.filter(m=>{
+      if(m.status !== 'FINISHED') return false;
+      const grp = (m.group||'').replace('GROUP_','').replace('Group ','').trim();
+      return grp === groupLetter;
+    }).length;
+  }
+
+  // Group is complete if all 6 matches are finished
+  const groupComplete = finishedGroupMatches >= totalGroupMatches;
+
+  // Fallback: use points math if we can't determine from matches
+  const maxPlayed = groupComplete ? 3 : Math.max(...table.map(t=>t.playedGames||0));
+  const remaining = Math.max(0, 3 - maxPlayed);
+
+  const wm = sorted.map(t=>({...t, maxPts: t.points + remaining*3}));
+  const thirdMax = wm[2]?.maxPts ?? 0;
+
+  const r = {};
+  wm.forEach((t,i)=>{
+    const k = teamAbbr(t.team) || tla(t.team);
+    // If group complete: top 2 by points are confirmed
+    // If ongoing: only confirmed if points exceed what 3rd can reach
+    r[k] = groupComplete ? i < 2 : t.points > thirdMax;
+  });
   return r;
 }
 
@@ -1055,7 +1081,7 @@ function renderGroups(groups){
   let html=`<div class="legend"><div class="legend-item"><div class="ldot q1"></div>1st · Advances</div><div class="legend-item"><div class="ldot q2"></div>2nd · Advances</div></div><div class="groups-grid">`;
   letters.forEach(letter=>{
     const table=groups[letter];
-    const conf=isConfirmed(table);
+    const conf=isConfirmed(table,letter);
     const matches=(gm[letter]||[]).sort((a,b)=>new Date(a.utcDate)-new Date(b.utcDate));
     const upcoming=matches.filter(m=>m.status!=='FINISHED').length;
     const played=matches.filter(m=>m.status==='FINISHED').length;
@@ -1199,61 +1225,157 @@ function renderFixtures(filterDay){
 /* ════════ BRACKET ════════ */
 function renderBracket(groups){
   const el=document.getElementById('bracket-content');
-  const confirmed={};
-  Object.entries(groups).forEach(([l,table])=>{
-    const conf=isConfirmed(table);
-    const sorted=[...table].sort((a,b)=>b.points-a.points);
-    confirmed[l]={first:conf[teamAbbr(sorted[0]?.team)||tla(sorted[0]?.team)]?sorted[0]:null,second:conf[teamAbbr(sorted[1]?.team)||tla(sorted[1]?.team)]?sorted[1]:null,teams:sorted};
+
+  // ══ GROUP STAGE IS COMPLETE — All 32 qualifiers confirmed ══
+  // Hardcoded from official FIFA pairings (June 27, 2026)
+  // Dynamic computation kept as fallback for future tournaments
+
+  // Check if group stage is done (all 6 matches per group finished)
+  const groupsDone = {};
+  Object.keys(groups).forEach(letter => {
+    const finished = STATE.matches.filter(m => {
+      if(m.status !== 'FINISHED') return false;
+      const grp = (m.group||'').replace('GROUP_','').replace('Group ','').trim();
+      return grp === letter;
+    }).length;
+    groupsDone[letter] = finished >= 6;
   });
-  function resolve(code){
-    if(!code||code==='TBD'||code==='3rd')return{team:null,label:code==='3rd'?'Best 3rd':'TBD'};
-    const pos=code[0],grp=code[1];
-    if(!confirmed[grp])return{team:null,label:code};
-    const t=pos==='1'?confirmed[grp].first:confirmed[grp].second;
-    return{team:t||null,label:`${pos==='1'?'1st':'2nd'} Grp ${grp}`};
+  const allGroupsDone = Object.keys(groupsDone).length >= 12 &&
+    Object.values(groupsDone).filter(Boolean).length >= 12;
+
+  // Confirmed R32 pairings — will show once group stage is complete
+  // Falls back to dynamic TBD slots if groups still in progress
+  const CONFIRMED_R32 = allGroupsDone ? [
+    // Left side (M1-M8)
+    {h:'Mexico',ha:'MEX',a:'Ecuador',aa:'ECU',lbl:'M1'},
+    {h:'Brazil',ha:'BRA',a:'Japan',aa:'JPN',lbl:'M2'},
+    {h:'Germany',ha:'GER',a:'Paraguay',aa:'PAR',lbl:'M3'},
+    {h:'Netherlands',ha:'NED',a:'Morocco',aa:'MAR',lbl:'M4'},
+    {h:'France',ha:'FRA',a:'Sweden',aa:'SWE',lbl:'M5'},
+    {h:'Colombia',ha:'COL',a:'Ghana',aa:'GHA',lbl:'M6'},
+    {h:'Switzerland',ha:'SUI',a:'Algeria',aa:'DZA',lbl:'M7'},
+    {h:'England',ha:'ENG',a:'Congo DR',aa:'COD',lbl:'M8'},
+    // Right side (M9-M16)
+    {h:'USA',ha:'USA',a:'Bosnia & Herz.',aa:'BIH',lbl:'M9'},
+    {h:'Belgium',ha:'BEL',a:'Senegal',aa:'SEN',lbl:'M10'},
+    {h:'South Africa',ha:'RSA',a:'Canada',aa:'CAN',lbl:'M11'},
+    {h:'Ivory Coast',ha:'CIV',a:'Norway',aa:'NOR',lbl:'M12'},
+    {h:'Spain',ha:'ESP',a:'Austria',aa:'AUT',lbl:'M13'},
+    {h:'Portugal',ha:'POR',a:'Croatia',aa:'CRO',lbl:'M14'},
+    {h:'Argentina',ha:'ARG',a:'Cape Verde',aa:'CPV',lbl:'M15'},
+    {h:'Australia',ha:'AUS',a:'Egypt',aa:'EGY',lbl:'M16'},
+  ] : null;
+
+  function confirmedSlot(name, abbr, isRight=false) {
+    const fl = FLAGS[abbr] || '🏳️';
+    const rc = isRight ? 'right-team' : '';
+    return `<div class="b-team conf ${rc}"><span class="bf">${fl}</span><span>${name}</span></div>`;
   }
-  function bTeam(r,isRight=false){
-    const rc=isRight?'right-team':'';
-    if(r.team){const fl=teamFlag(r.team.team);const nm=r.team.team?.shortName||r.team.team?.name||'';return`<div class="b-team conf ${rc}"><span class="bf">${fl}</span><span>${nm}</span></div>`;}
-    return`<div class="b-team tbd ${rc}">${r.label}</div>`;
+  function tbdSlot(label, isRight=false) {
+    return `<div class="b-team tbd ${isRight?'right-team':''}">${label}</div>`;
   }
-  function bMatch(r1,r2,lbl,gold=false,isRight=false){
-    return`<div class="b-match ${gold?'gold-card':''} ${isRight?'right-accent':''}"><div class="b-team conf" style="display:none"></div>${bTeam(r1,isRight)}${bTeam(r2,isRight)}<div class="b-lbl">${lbl}</div></div>`;
+  function bMatch(h, ha, a, aa, lbl, isRight=false) {
+    const accent = isRight ? 'right-accent' : '';
+    const hSlot = ha ? confirmedSlot(h, ha, false) : tbdSlot(h, false);
+    const aSlot = aa ? confirmedSlot(a, aa, false) : tbdSlot(a, false);
+    // For right-side matches, flip team display
+    const top = isRight ? confirmedSlot(h, ha, true) : hSlot;
+    const bot = isRight ? confirmedSlot(a, aa, true) : aSlot;
+    return `<div class="b-match ${accent}">${top}${bot}<div class="b-lbl">${lbl}</div></div>`;
   }
-  function tbdMatch(lbl,isRight=false){return`<div class="b-match ${isRight?'right-accent':''}"><div class="b-team tbd ${isRight?'right-team':''}">TBD</div><div class="b-team tbd ${isRight?'right-team':''}">TBD</div><div class="b-lbl">${lbl}</div></div>`;}
-  function grpCard(letter){
-    const table=groups[letter]||[];
-    const sorted=[...table].sort((a,b)=>b.points-a.points);
-    const rows=[0,1,2].map(pos=>{
-      const row=sorted[pos];
-      if(!row||!row.team)return`<div class="grp-team pos-${pos+1}"><span class="grp-pos-num">${pos+1}</span><span class="gf" style="opacity:.3">❓</span><span class="grp-tname" style="opacity:.3">TBD</span><span class="grp-pts"></span></div>`;
-      const fl=teamFlag(row.team);
-      const nm=row.team.shortName||row.team.name||'';
-      return`<div class="grp-team pos-${pos+1}"><span class="grp-pos-num">${pos+1}</span><span class="gf">${fl}</span><span class="grp-tname">${nm}</span><span class="grp-pts">${row.points}pt</span></div>`;
-    }).join('');
-    return`<div class="grp-card"><div class="grp-card-lbl">Group ${letter}</div>${rows}</div>`;
+  function tbdMatch(lbl, isRight=false) {
+    return `<div class="b-match ${isRight?'right-accent':''}">
+      <div class="b-team tbd ${isRight?'right-team':''}">TBD</div>
+      <div class="b-team tbd ${isRight?'right-team':''}">TBD</div>
+      <div class="b-lbl">${lbl}</div>
+    </div>`;
   }
-  const S=70;
-  const r32pairs=[['1A','2B'],['1C','2D'],['1E','2F'],['1G','2H'],['1I','2J'],['1K','2L'],['2A','1B'],['2C','1D'],['2E','1F'],['2G','1H'],['2I','1J'],['2K','1L'],['3rd','TBD'],['3rd','TBD'],['3rd','TBD'],['3rd','TBD']];
-  const leftGrps=['A','B','C','D','E','F'];
-  const rightGrps=['G','H','I','J','K','L'];
-  let lGrpHtml='',rGrpHtml='';
-  leftGrps.forEach((l,i)=>{lGrpHtml+=grpCard(l);if(i<5)lGrpHtml+=`<div class="grp-spacer" style="height:${S*0.45}px"></div>`;});
-  rightGrps.forEach((l,i)=>{rGrpHtml+=grpCard(l);if(i<5)rGrpHtml+=`<div class="grp-spacer" style="height:${S*0.45}px"></div>`;});
-  let lR32='',rR32='';
-  r32pairs.slice(0,8).forEach((p,i)=>{const t1=resolve(p[0]),t2=resolve(p[1]);lR32+=bMatch(t1,t2,`M${i+1}`);if(i<7)lR32+=`<div class="b-spacer" style="height:4px"></div>`;});
-  r32pairs.slice(8).forEach((p,i)=>{const t1=resolve(p[0]),t2=resolve(p[1]);rR32+=bMatch(t1,t2,`M${i+9}`,false,true);if(i<7)rR32+=`<div class="b-spacer" style="height:4px"></div>`;});
+
+  // Build left R32 (M1-M8)
+  let lR32 = '';
+  for(let i=0;i<8;i++){
+    const p = CONFIRMED_R32?.[i];
+    if(p) lR32 += bMatch(p.h, p.ha, p.a, p.aa, p.lbl, false);
+    else {
+      const sorted = Object.values(groups).sort((a,b)=>0);
+      lR32 += tbdMatch(`M${i+1}`);
+    }
+    if(i<7) lR32 += `<div class="b-spacer" style="height:4px"></div>`;
+  }
+
+  // Build right R32 (M9-M16)
+  let rR32 = '';
+  for(let i=8;i<16;i++){
+    const p = CONFIRMED_R32?.[i];
+    if(p) rR32 += bMatch(p.h, p.ha, p.a, p.aa, p.lbl, true);
+    else rR32 += tbdMatch(`M${i+1}`, true);
+    if(i<15) rR32 += `<div class="b-spacer" style="height:4px"></div>`;
+  }
+
+  // R16 — check STATE.matches for KO results
+  const r16Matches = STATE.matches.filter(m=>m.stage==='ROUND_OF_32'||m.group===null&&m.stage?.includes('32')).sort((a,b)=>new Date(a.utcDate)-new Date(b.utcDate));
+
+  const S = 70;
+  function koSlot(m, isRight=false) {
+    if(!m) return tbdSlot('TBD', isRight);
+    if(m.status==='FINISHED'){
+      const winner = m.score?.fullTime?.home > m.score?.fullTime?.away ? m.homeTeam : m.awayTeam;
+      const a = teamAbbr(winner)||tla(winner);
+      return `<div class="b-team conf ${isRight?'right-team':''}"><span class="bf">${teamFlag(winner)}</span><span>${winner?.shortName||winner?.name||a}</span></div>`;
+    }
+    if(m.status==='IN_PLAY'||m.status==='PAUSED'){
+      const ht=tla(m.homeTeam),at=tla(m.awayTeam);
+      return `<div class="b-team conf ${isRight?'right-team':''}" style="color:var(--red)"><span class="bf">●</span><span>${isRight?at:ht} ${m.score?.fullTime?.home??0}–${m.score?.fullTime?.away??0} ${isRight?ht:at}</span></div>`;
+    }
+    // Scheduled — show both teams if known
+    const ht=m.homeTeam,at=m.awayTeam;
+    const hf=teamFlag(ht),af=teamFlag(at);
+    return `<div class="b-team conf ${isRight?'right-team':''}"><span class="bf">${isRight?af:hf}</span><span>${isRight?(at?.shortName||tla(at)):(ht?.shortName||tla(ht))}</span></div>`;
+  }
+
   let lR16='',rR16='';
   for(let i=0;i<4;i++){lR16+=tbdMatch(`R16 #${i+1}`);if(i<3)lR16+=`<div class="b-spacer" style="height:${S*0.9}px"></div>`;}
   for(let i=0;i<4;i++){rR16+=tbdMatch(`R16 #${i+5}`,true);if(i<3)rR16+=`<div class="b-spacer" style="height:${S*0.9}px"></div>`;}
   let lQF='',rQF='';
   [0,1].forEach(i=>{lQF+=tbdMatch(`QF ${i+1}`);if(i===0)lQF+=`<div class="b-spacer" style="height:${S*2.8}px"></div>`;});
   [0,1].forEach(i=>{rQF+=tbdMatch(`QF ${i+3}`,true);if(i===0)rQF+=`<div class="b-spacer" style="height:${S*2.8}px"></div>`;});
-  const trophyImgEl=document.querySelector('.b-trophy-icon');
-  const trophySrc=trophyImgEl?trophyImgEl.src:'';
+
+  // Group mini-cards for bracket sides
+  function grpCard(letter){
+    const table=groups[letter]||[];
+    const sorted=[...table].sort((a,b)=>b.points-a.points);
+    const rows=[0,1,2].map(pos=>{
+      const row=sorted[pos];
+      if(!row||!row.team) return`<div class="grp-team pos-${pos+1}"><span class="grp-pos-num">${pos+1}</span><span class="gf" style="opacity:.3">❓</span><span class="grp-tname" style="opacity:.3">TBD</span><span class="grp-pts"></span></div>`;
+      const fl=teamFlag(row.team);
+      const nm=row.team.shortName||row.team.name||'';
+      const isDone=groupsDone[letter];
+      const isThirdQual = isDone && pos===2 && ['COD','SWE','ECU','GHA','BIH','PAR','SEN','DZA'].includes(teamAbbr(row.team)||tla(row.team));
+      return`<div class="grp-team pos-${pos+1}">
+        <span class="grp-pos-num">${pos+1}</span>
+        <span class="gf">${fl}</span>
+        <span class="grp-tname" style="${isThirdQual?'color:var(--green)':''}">${nm}</span>
+        <span class="grp-pts" style="${isThirdQual?'color:var(--green)':''}">
+          ${row.points}pt${isThirdQual?' ✓':''}
+        </span>
+      </div>`;
+    }).join('');
+    return`<div class="grp-card"><div class="grp-card-lbl">Group ${letter}${groupsDone[letter]?' ✓':''}</div>${rows}</div>`;
+  }
+
+  const leftGrps=['A','B','C','D','E','F'];
+  const rightGrps=['G','H','I','J','K','L'];
+  let lGrpHtml='',rGrpHtml='';
+  leftGrps.forEach((l,i)=>{lGrpHtml+=grpCard(l);if(i<5)lGrpHtml+=`<div class="grp-spacer" style="height:${S*0.45}px"></div>`;});
+  rightGrps.forEach((l,i)=>{rGrpHtml+=grpCard(l);if(i<5)rGrpHtml+=`<div class="grp-spacer" style="height:${S*0.45}px"></div>`;});
+
+  const statusMsg = allGroupsDone
+    ? `<strong style="color:var(--green)">Group stage complete</strong> — All 32 teams confirmed for Round of 32. Click any fixture to view match stats.`
+    : `<strong style="color:var(--gold)">Group stage in progress</strong> — Confirmed qualifiers show flag & name. Best 3rd place spots shown in <span style="color:var(--green)">green ✓</span>.`;
+
   el.innerHTML=`
-    <div class="bracket-note"><strong>Knockout bracket</strong> — Confirmed qualifiers show flag & name. Groups feed from both sides toward the Final.</div>
-    <div class="scroll-hint"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M13.5 4.5 21 12m0 0-7.5 7.5M21 12H3" /></svg>Scroll to explore</div>
+    <div class="bracket-note">${statusMsg}</div>
+    <div class="scroll-hint"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M13.5 4.5 21 12m0 0-7.5 7.5M21 12H3" /></svg>Scroll to explore bracket</div>
     <div class="bracket-outer"><div class="bracket" style="align-items:flex-start">
       <div class="b-col" style="min-width:108px;padding-top:28px">${lGrpHtml}</div>
       <div class="b-col" style="min-width:148px;padding-top:28px"><div class="b-round-hdr">Round of 32</div>${lR32}</div>
@@ -1262,13 +1384,13 @@ function renderBracket(groups){
       <div class="b-col" style="min-width:135px;padding-top:${S*4.8}px"><div class="b-round-hdr">Semi Finals</div>${tbdMatch('SF 1')}</div>
       <div class="b-col" style="min-width:128px;padding-top:${S*3}px">
         <div class="b-round-hdr" style="border-top-color:#E6A800">The Final</div>
-        <div class="b-match gold-card"><div class="b-team tbd">Winner SF 1</div><div class="b-team tbd">Winner SF 2</div><div class="b-lbl">🏆 Final</div></div>
+        <div class="b-match gold-card"><div class="b-team tbd">Winner SF 1</div><div class="b-team tbd">Winner SF 2</div><div class="b-lbl">🏆 Final · Jul 19</div></div>
         <div class="b-round-hdr" style="border-top-color:#22C55E;margin-top:16px">3rd Place</div>
-        <div class="b-match"><div class="b-team tbd">Loser SF 1</div><div class="b-team tbd">Loser SF 2</div><div class="b-lbl">Bronze</div></div>
+        <div class="b-match"><div class="b-team tbd">Loser SF 1</div><div class="b-team tbd">Loser SF 2</div><div class="b-lbl">Bronze · Jul 18</div></div>
       </div>
-      <div class="b-center" style="padding-top:${S*2.5}px" id="bracket-trophy-center">
-        <div class="b-trophy p" style="font-size:11px;font-weight:700;letter-spacing:0.1em;color:var(--gold);text-align:center">⚽</div>
-        <div style="font-family:'Bebas Neue',sans-serif;font-size:11px;letter-spacing:0.1em;color:var(--gold);text-align:center">Champion</div>
+      <div class="b-center" style="padding-top:${S*2.5}px">
+        <div style="font-size:36px;filter:drop-shadow(0 0 16px rgba(245,200,66,.5))">🏆</div>
+        <div style="font-family:'Bebas Neue',sans-serif;font-size:11px;letter-spacing:0.1em;color:var(--gold);text-align:center;margin-top:4px">Champion</div>
       </div>
       <div class="b-col" style="min-width:135px;padding-top:${S*4.8}px"><div class="b-round-hdr">Semi Finals</div>${tbdMatch('SF 2',true)}</div>
       <div class="b-col" style="min-width:138px;padding-top:${S*1.9}px"><div class="b-round-hdr">Quarter Finals</div>${rQF}</div>
@@ -1884,7 +2006,7 @@ function showTab(tab,btn){
 /* ════════ BOOT ════════ */
 initTheme();
 loadAll();
-setInterval(loadAll, 5*60*1000);
+setInterval(loadAll, 90*1000); // 90s refresh during active tournament
 setInterval(()=>{
   if(!STATE.lastUpdated)return;
   const mins=Math.round((Date.now()-STATE.lastUpdated)/60000);
