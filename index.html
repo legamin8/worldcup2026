@@ -1321,6 +1321,12 @@ function renderBracket(groups){
     .filter(m => !m.group)
     .sort((a,b) => new Date(a.utcDate) - new Date(b.utcDate));
 
+  // DEBUG — log to console so we can see what's available
+  console.log('[Bracket] Total matches:', STATE.matches.length,
+    '| Non-group:', allNonGroup.length,
+    '| Stages:', [...new Set(allNonGroup.map(m=>m.stage))].join(','));
+  console.log('[Bracket] KO matches:', allNonGroup.map(m=>`${m.stage}:${m.homeTeam?.tla}v${m.awayTeam?.tla}(${m.status})`));
+
   const byStage = {};
   const byNorm = {}; // normalized stage buckets
   allNonGroup.forEach(m => {

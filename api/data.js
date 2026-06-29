@@ -315,7 +315,25 @@ export default async function handler(req, res) {
       return res.status(200).json({ scorers: merged });
     }
 
-    // ── 7. DEFAULT — standings + matches (2 calls, sequential to respect rate limit)
+    // DEBUG — show KO match stages to diagnose bracket issues
+    if (type === 'ko_debug') {
+      const data = await fd(`/competitions/WC/matches?limit=200`);
+      const ko = (data.matches || [])
+        .filter(m => !m.group)
+        .map(m => ({
+          id: m.id,
+          stage: m.stage,
+          status: m.status,
+          home: m.homeTeam?.tla,
+          away: m.awayTeam?.tla,
+          score: m.status==='FINISHED' ? `${m.score?.fullTime?.home}-${m.score?.fullTime?.away}` : m.status,
+          date: m.utcDate?.slice(0,10),
+        }));
+      res.setHeader('Cache-Control', 'no-store');
+      return res.status(200).json({ total: ko.length, matches: ko });
+    }
+
+
     // Teams data removed — crests come from standings rows which include team.crest
     // Sequential (not parallel) to stay under 10 req/min free tier
     const standingsData = await fd(`/competitions/WC/standings`);
