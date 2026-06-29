@@ -1440,42 +1440,111 @@ function renderBracket(groups){
 
   const r16All = stageMatches('R16');
   const qfAll  = stageMatches('QF');
-
-  // Debug info for bracket note
   const r16Debug = r16All.map(m=>`${m.homeTeam?.tla||'?'}v${m.awayTeam?.tla||'?'}(${m.status})`).join(', ');
 
-  // ── SIMPLE APPROACH: don't try to split left/right by team name.
-  // Instead, show ALL R16 matches on BOTH sides based on chronological order.
-  // First 4 → left bracket, last 4 → right bracket (FIFA scheduling puts left-side matches first)
-  // This is more reliable than fuzzy team matching.
-  const r16Left  = r16All.slice(0, 4);
-  const r16Right = r16All.slice(4, 8);
+  // ── RESOLVE R16 TEAMS FROM R32 WINNERS ──
+  // football-data.org shows R16 slots as TIMED with empty team data.
+  // We compute the teams ourselves from R32 results.
+  const r32All2 = stageMatches('R32');
 
-  const qfLeft  = qfAll.slice(0, 2);
-  const qfRight = qfAll.slice(2, 4);
+  function getWinner(match) {
+    if(!match || match.status !== 'FINISHED') return null;
+    const hs = match.score?.fullTime?.home ?? 0;
+    const as_ = match.score?.fullTime?.away ?? 0;
+    const hpen = match.score?.penalties?.home;
+    const apen = match.score?.penalties?.away;
+    if(hs > as_) return match.homeTeam;
+    if(as_ > hs) return match.awayTeam;
+    if(hpen != null) return hpen > apen ? match.homeTeam : match.awayTeam;
+    return null;
+  }
 
+  function findR32ByPairing(idx) {
+    const p = CONFIRMED_R32?.[idx];
+    if(!p) return null;
+    return r32All2.find(m => {
+      const ha = m.homeTeam?.tla||''; const aa = m.awayTeam?.tla||'';
+      return ha===p.ha||aa===p.aa||ha===p.aa||aa===p.ha;
+    }) || null;
+  }
+
+  // R16 slot pairs: [M1 winner vs M2 winner, M3 vs M4, M5 vs M6, M7 vs M8,
+  //                  M9 vs M10, M11 vs M12, M13 vs M14, M15 vs M16]
+  const r16Pairs = [[0,1],[2,3],[4,5],[6,7],[8,9],[10,11],[12,13],[14,15]];
+  const r16Resolved = r16Pairs.map(([i1,i2]) => ({
+    home: getWinner(findR32ByPairing(i1)),
+    away: getWinner(findR32ByPairing(i2)),
+  }));
+
+  function r16Card(slotIdx, isRight=false) {
+    const apiM = r16All[slotIdx];
+    const res  = r16Resolved[slotIdx];
+    const accent = isRight?'right-accent':'';
+    const rt = isRight?'right-team':'';
+
+    // Teams: prefer API data, fall back to computed winners
+    const ht = (apiM?.homeTeam?.tla || apiM?.homeTeam?.name) ? apiM.homeTeam : res?.home;
+    const at = (apiM?.awayTeam?.tla || apiM?.awayTeam?.name) ? apiM.awayTeam : res?.away;
+
+    const htTla=ht?.tla||''; const atTla=at?.tla||'';
+    const htF=(htTla&&FLAGS[htTla])?FLAGS[htTla]:(ht?.name?teamFlag(ht):'🏳️');
+    const atF=(atTla&&FLAGS[atTla])?FLAGS[atTla]:(at?.name?teamFlag(at):'🏳️');
+    const htN=ht?.shortName||ht?.name||htTla||null;
+    const atN=at?.shortName||at?.name||atTla||null;
+
+    const isFin=apiM?.status==='FINISHED';
+    const isLive=apiM?.status==='IN_PLAY'||apiM?.status==='PAUSED';
+    const hs=apiM?.score?.fullTime?.home;
+    const as_=apiM?.score?.fullTime?.away;
+    const hpen=apiM?.score?.penalties?.home;
+    const apen=apiM?.score?.penalties?.away;
+    const hWin=isFin&&(hs>as_||(hs===as_&&hpen>apen));
+    const aWin=isFin&&(as_>hs||(as_===hs&&apen>hpen));
+
+    const hS=hWin?' style="color:var(--green);font-weight:700"':'';
+    const aS=aWin?' style="color:var(--green);font-weight:700"':'';
+
+    let lbl;
+    if(isFin||isLive){
+      const pen=(hpen!=null&&apen!=null)?` (P:${hpen}–${apen})`:'';
+      const ht_=apiM?.score?.halfTime?.home;
+      lbl=`<div class="b-lbl" style="color:${isLive?'var(--red)':'var(--text2)'}">${isLive?'● ':''}${hs??0}–${as_??0}${pen}${ht_!=null?` HT:${ht_}-${apiM.score.halfTime.away}`:''}</div>`;
+    } else if(apiM) {
+      lbl=`<div class="b-lbl">${catTime(apiM.utcDate)} · ${shortDate(apiM.utcDate)}</div>`;
+    } else {
+      lbl=`<div class="b-lbl" style="color:var(--text3)">Awaiting draw</div>`;
+    }
+
+    const brd=isLive?' style="box-shadow:0 0 0 1px var(--red)"':'';
+    const clk=apiM?.id?`onclick="openMatch(${apiM.id})" style="cursor:pointer"`:'';
+
+    const hSlot=htN?`<div class="b-team conf ${rt}"${hS}><span class="bf">${htF}</span><span>${htN}</span></div>`
+                   :`<div class="b-team tbd ${rt}">TBD</div>`;
+    const aSlot=atN?`<div class="b-team conf ${rt}"${aS}><span class="bf">${atF}</span><span>${atN}</span></div>`
+                   :`<div class="b-team tbd ${rt}">TBD</div>`;
+
+    return `<div class="b-match ${accent}"${brd} ${clk}>${hSlot}${aSlot}${lbl}</div>`;
+  }
 
   let lR16='', rR16='';
   for(let i=0;i<4;i++){
-    const m = r16Left[i];
-    lR16 += m ? koMatchCard(m, false) : tbdMatch(`R16 #${i+1}`);
+    lR16 += r16Card(i, false);
     if(i<3) lR16 += `<div class="b-spacer" style="height:${S*0.9}px"></div>`;
   }
-  for(let i=0;i<4;i++){
-    const m = r16Right[i];
-    rR16 += m ? koMatchCard(m, true) : tbdMatch(`R16 #${i+5}`, true);
-    if(i<3) rR16 += `<div class="b-spacer" style="height:${S*0.9}px"></div>`;
+  for(let i=4;i<8;i++){
+    rR16 += r16Card(i, true);
+    if(i<7) rR16 += `<div class="b-spacer" style="height:${S*0.9}px"></div>`;
   }
 
-  // QF — first 2 chronologically → left, last 2 → right
+  // QF — show with dates when available
   let lQF='', rQF='';
   [0,1].forEach(i=>{
-    const m = qfLeft[i];
+    const m = qfAll[i];
     lQF += m ? koMatchCard(m, false) : tbdMatch(`QF ${i+1}`);
     if(i===0) lQF += `<div class="b-spacer" style="height:${S*2.8}px"></div>`;
   });
   [0,1].forEach(i=>{
-    const m = qfRight[i];
+    const m = qfAll[i+2];
     rQF += m ? koMatchCard(m, true) : tbdMatch(`QF ${i+3}`, true);
     if(i===0) rQF += `<div class="b-spacer" style="height:${S*2.8}px"></div>`;
   });
