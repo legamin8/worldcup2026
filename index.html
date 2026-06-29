@@ -1286,8 +1286,8 @@ function renderBracket(groups){
   }
   function tbdMatch(lbl, isRight=false) {
     return `<div class="b-match ${isRight?'right-accent':''}">
-      <div class="b-team tbd ${isRight?'right-team':''}">TBD</div>
-      <div class="b-team tbd ${isRight?'right-team':''}">TBD</div>
+      <div class="b-team tbd ${isRight?'right-team':''}">— TBD —</div>
+      <div class="b-team tbd ${isRight?'right-team':''}">— TBD —</div>
       <div class="b-lbl">${lbl}</div>
     </div>`;
   }
@@ -1341,10 +1341,13 @@ function renderBracket(groups){
   function koMatchCard(m, isRight=false) {
     if(!m) return tbdMatch('TBD', isRight);
     const ht = m.homeTeam, at = m.awayTeam;
-    const htF = teamFlag(ht)||FLAGS[teamAbbr(ht)]||'🏳️';
-    const atF = teamFlag(at)||FLAGS[teamAbbr(at)]||'🏳️';
-    const htN = ht?.shortName||ht?.name||tla(ht)||'TBD';
-    const atN = at?.shortName||at?.name||tla(at)||'TBD';
+    // Safe flag: only use tla direct lookup, never fuzzy match (avoids Mexico ghost)
+    const htTla = ht?.tla||'';
+    const atTla = at?.tla||'';
+    const htF = (htTla && FLAGS[htTla]) ? FLAGS[htTla] : (ht?.name ? teamFlag(ht) : '🏳️');
+    const atF = (atTla && FLAGS[atTla]) ? FLAGS[atTla] : (at?.name ? teamFlag(at) : '🏳️');
+    const htN = ht?.shortName||ht?.name||(htTla?htTla:null)||'TBD';
+    const atN = at?.shortName||at?.name||(atTla?atTla:null)||'TBD';
     const isFin = m.status==='FINISHED';
     const isLive = m.status==='IN_PLAY'||m.status==='PAUSED';
     const hs = m.score?.fullTime?.home;
@@ -1363,12 +1366,15 @@ function renderBracket(groups){
     const accent = isRight ? 'right-accent' : '';
     const border = isLive ? 'style="box-shadow:0 0 0 1px var(--red)"' : '';
 
-    const hClass = `b-team ${htN==='TBD'?'tbd':'conf'} ${isRight?'right-team':''} ${hWin?'style="color:var(--green)"':''}`;
-    const aClass = `b-team ${atN==='TBD'?'tbd':'conf'} ${isRight?'right-team':''} ${aWin?'style="color:var(--green)"':''}`;
+    const hStyle = hWin ? ' style="color:var(--green);font-weight:700"' : '';
+    const aStyle = aWin ? ' style="color:var(--green);font-weight:700"' : '';
+    const htbd = htN==='TBD'?'tbd':'conf';
+    const atbd = atN==='TBD'?'tbd':'conf';
+    const rt = isRight?'right-team':'';
 
     return `<div class="b-match ${accent}" ${border} onclick="openMatch(${m.id})" style="cursor:pointer">
-      <div class="${hClass}"><span class="bf">${htF}</span><span>${htN}</span></div>
-      <div class="${aClass}"><span class="bf">${atF}</span><span>${atN}</span></div>
+      <div class="b-team ${htbd} ${rt}"${hStyle}><span class="bf">${htF}</span><span>${htN}</span></div>
+      <div class="b-team ${atbd} ${rt}"${aStyle}><span class="bf">${atF}</span><span>${atN}</span></div>
       ${scoreTag}
     </div>`;
   }
@@ -1413,10 +1419,17 @@ function renderBracket(groups){
   const RIGHT_TEAMS = new Set(['USA','BIH','BEL','SEN','RSA','CAN','CIV','NOR','ESP','AUT','POR','CRO','ARG','CPV','AUS','EGY']);
 
   function isLeftMatch(m) {
-    const ha = teamAbbr(m.homeTeam)||tla(m.homeTeam);
-    const aa = teamAbbr(m.awayTeam)||tla(m.awayTeam);
-    // A match belongs to the left side if either team came from M1-M8
-    return LEFT_TEAMS.has(ha) || LEFT_TEAMS.has(aa);
+    // Use tla directly — most reliable identifier in KO match objects
+    const ha = m.homeTeam?.tla || teamAbbr(m.homeTeam) || tla(m.homeTeam) || '';
+    const aa = m.awayTeam?.tla || teamAbbr(m.awayTeam) || tla(m.awayTeam) || '';
+    // Also check by name for robustness
+    const hn = (m.homeTeam?.name||m.homeTeam?.shortName||'').toLowerCase();
+    const an = (m.awayTeam?.name||m.awayTeam?.shortName||'').toLowerCase();
+    const LEFT_NAMES = ['mexico','ecuador','brazil','japan','germany','paraguay',
+      'netherlands','morocco','france','sweden','colombia','ghana',
+      'switzerland','algeria','england','congo'];
+    const haLeft = LEFT_TEAMS.has(ha) || LEFT_NAMES.some(n=>hn.includes(n)||an.includes(n));
+    return haLeft;
   }
 
   const r16All = stageMatches('R16');
