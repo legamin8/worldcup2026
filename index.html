@@ -1225,6 +1225,7 @@ function renderFixtures(filterDay){
 /* ════════ BRACKET ════════ */
 function renderBracket(groups){
   const el=document.getElementById('bracket-content');
+  const S = 70; // slot height px for bracket spacing
 
   // ══ GROUP STAGE IS COMPLETE — All 32 qualifiers confirmed ══
   // Hardcoded from official FIFA pairings (June 27, 2026)
@@ -1414,8 +1415,7 @@ function renderBracket(groups){
   const finalCard = finalData ? koMatchCard(finalData, false) : `<div class="b-match gold-card"><div class="b-team tbd">Winner SF 1</div><div class="b-team tbd">Winner SF 2</div><div class="b-lbl">🏆 Final · Jul 19</div></div>`;
   const bronzeCard = thirdData ? koMatchCard(thirdData, false) : `<div class="b-match"><div class="b-team tbd">Loser SF 1</div><div class="b-team tbd">Loser SF 2</div><div class="b-lbl">Bronze · Jul 18</div></div>`;
 
-  const S2 = 70; // slot height px for bracket spacing
-  const S = S2;  // alias used throughout bracket layout
+  // S already declared at top of function
 
   // Group mini-cards for bracket sides
   function grpCard(letter){
