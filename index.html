@@ -1223,15 +1223,12 @@ function renderFixtures(filterDay){
 }
 
 /* ════════ BRACKET ════════ */
+/* ════════ BRACKET — OFFICIAL FIFA MATCH-NUMBER STRUCTURE ════════ */
 function renderBracket(groups){
   const el=document.getElementById('bracket-content');
-  const S = 70; // slot height px for bracket spacing
+  const S = 70;
 
-  // ══ GROUP STAGE IS COMPLETE — All 32 qualifiers confirmed ══
-  // Hardcoded from official FIFA pairings (June 27, 2026)
-  // Dynamic computation kept as fallback for future tournaments
-
-  // Check if group stage is done (all 6 matches per group finished)
+  // Check if group stage is done
   const groupsDone = {};
   Object.keys(groups).forEach(letter => {
     const finished = STATE.matches.filter(m => {
@@ -1244,288 +1241,108 @@ function renderBracket(groups){
   const allGroupsDone = Object.keys(groupsDone).length >= 12 &&
     Object.values(groupsDone).filter(Boolean).length >= 12;
 
-  // Confirmed R32 pairings — will show once group stage is complete
-  // Falls back to dynamic TBD slots if groups still in progress
-  const CONFIRMED_R32 = allGroupsDone ? [
-    // Left side (M1-M8)
-    {h:'Mexico',ha:'MEX',a:'Ecuador',aa:'ECU',lbl:'M1'},
-    {h:'Brazil',ha:'BRA',a:'Japan',aa:'JPN',lbl:'M2'},
-    {h:'Germany',ha:'GER',a:'Paraguay',aa:'PAR',lbl:'M3'},
-    {h:'Netherlands',ha:'NED',a:'Morocco',aa:'MAR',lbl:'M4'},
-    {h:'France',ha:'FRA',a:'Sweden',aa:'SWE',lbl:'M5'},
-    {h:'Colombia',ha:'COL',a:'Ghana',aa:'GHA',lbl:'M6'},
-    {h:'Switzerland',ha:'SUI',a:'Algeria',aa:'DZA',lbl:'M7'},
-    {h:'England',ha:'ENG',a:'Congo DR',aa:'COD',lbl:'M8'},
-    // Right side (M9-M16)
-    {h:'USA',ha:'USA',a:'Bosnia & Herz.',aa:'BIH',lbl:'M9'},
-    {h:'Belgium',ha:'BEL',a:'Senegal',aa:'SEN',lbl:'M10'},
-    {h:'South Africa',ha:'RSA',a:'Canada',aa:'CAN',lbl:'M11'},
-    {h:'Ivory Coast',ha:'CIV',a:'Norway',aa:'NOR',lbl:'M12'},
-    {h:'Spain',ha:'ESP',a:'Austria',aa:'AUT',lbl:'M13'},
-    {h:'Portugal',ha:'POR',a:'Croatia',aa:'CRO',lbl:'M14'},
-    {h:'Argentina',ha:'ARG',a:'Cape Verde',aa:'CPV',lbl:'M15'},
-    {h:'Australia',ha:'AUS',a:'Egypt',aa:'EGY',lbl:'M16'},
-  ] : null;
-
-  function confirmedSlot(name, abbr, isRight=false) {
-    const fl = FLAGS[abbr] || '🏳️';
-    const rc = isRight ? 'right-team' : '';
-    return `<div class="b-team conf ${rc}"><span class="bf">${fl}</span><span>${name}</span></div>`;
-  }
-  function tbdSlot(label, isRight=false) {
-    return `<div class="b-team tbd ${isRight?'right-team':''}">${label}</div>`;
-  }
-  function bMatch(h, ha, a, aa, lbl, isRight=false) {
-    const accent = isRight ? 'right-accent' : '';
-    const hSlot = ha ? confirmedSlot(h, ha, false) : tbdSlot(h, false);
-    const aSlot = aa ? confirmedSlot(a, aa, false) : tbdSlot(a, false);
-    // For right-side matches, flip team display
-    const top = isRight ? confirmedSlot(h, ha, true) : hSlot;
-    const bot = isRight ? confirmedSlot(a, aa, true) : aSlot;
-    return `<div class="b-match ${accent}">${top}${bot}<div class="b-lbl">${lbl}</div></div>`;
-  }
-  function tbdMatch(lbl, isRight=false) {
-    return `<div class="b-match ${isRight?'right-accent':''}">
-      <div class="b-team tbd ${isRight?'right-team':''}">— TBD —</div>
-      <div class="b-team tbd ${isRight?'right-team':''}">— TBD —</div>
-      <div class="b-lbl">${lbl}</div>
-    </div>`;
-  }
-
-  // ── KNOCKOUT ROUND RENDERING FROM STATE.matches ──
-  // football-data.org KO matches have no group field (null/undefined)
-  // Stage names vary: ROUND_OF_32, LAST_32, ROUND_OF_16, LAST_16, etc.
-  const KO_STAGE_MAP = {
-    'ROUND_OF_32':        'R32',
-    'LAST_32':            'R32',
-    'ROUND_OF_16':        'R16',
-    'LAST_16':            'R16',
-    'QUARTER_FINALS':     'QF',
-    'QUARTER_FINAL':      'QF',
-    'SEMI_FINALS':        'SF',
-    'SEMI_FINAL':         'SF',
-    'FINAL':              'FINAL',
-    '3RD_PLACE_PLAY_OFF': 'THIRD',
-    'THIRD_PLACE_PLAY_OFF':'THIRD',
-    'THIRD_PLACE':        'THIRD',
-    'PLAY_OFF_FOR_THIRD_PLACE':'THIRD',
+  // ═══ OFFICIAL FIFA MATCH NUMBERS (verified from FIFA.com / NBC / ESPN / Sky Sports) ═══
+  // R32 = Matches 73-88, R16 = 89-96, QF = 97-100, SF = 101-102, 3rd = 103, Final = 104
+  const R32_TEAMS = {
+    73:{h:'South Africa',ha:'RSA',a:'Canada',aa:'CAN'},
+    74:{h:'Germany',ha:'GER',a:'Paraguay',aa:'PAR'},
+    75:{h:'Netherlands',ha:'NED',a:'Morocco',aa:'MAR'},
+    76:{h:'Brazil',ha:'BRA',a:'Japan',aa:'JPN'},
+    77:{h:'France',ha:'FRA',a:'Sweden',aa:'SWE'},
+    78:{h:'Ivory Coast',ha:'CIV',a:'Norway',aa:'NOR'},
+    79:{h:'Mexico',ha:'MEX',a:'Ecuador',aa:'ECU'},
+    80:{h:'England',ha:'ENG',a:'Congo DR',aa:'COD'},
+    81:{h:'USA',ha:'USA',a:'Bosnia & Herz.',aa:'BIH'},
+    82:{h:'Belgium',ha:'BEL',a:'Senegal',aa:'SEN'},
+    83:{h:'Portugal',ha:'POR',a:'Croatia',aa:'CRO'},
+    84:{h:'Spain',ha:'ESP',a:'Austria',aa:'AUT'},
+    85:{h:'Switzerland',ha:'SUI',a:'Algeria',aa:'DZA'},
+    86:{h:'Argentina',ha:'ARG',a:'Cape Verde',aa:'CPV'},
+    87:{h:'Colombia',ha:'COL',a:'Ghana',aa:'GHA'},
+    88:{h:'Australia',ha:'AUS',a:'Egypt',aa:'EGY'},
   };
+  // R16 feeders: matchNum -> [feederMatch1, feederMatch2]
+  const R16_FEEDERS = {89:[74,77], 90:[73,75], 91:[76,78], 92:[79,80], 93:[83,84], 94:[81,82], 95:[86,88], 96:[85,87]};
+  const QF_FEEDERS  = {97:[89,90], 98:[93,94], 99:[91,92], 100:[95,96]};
+  const SF_FEEDERS  = {101:[97,98], 102:[99,100]};
+  const THIRD_FEEDERS = [101,102]; // losers
+  const FINAL_FEEDERS = [101,102]; // winners
 
-  // Filter KO matches — no group field means KO stage
-  const koMatches = STATE.matches
-    .filter(m => !m.group && m.stage && m.stage !== 'GROUP_STAGE')
-    .sort((a,b) => new Date(a.utcDate) - new Date(b.utcDate));
+  // Official bracket sides (confirmed from API debug + FIFA.com)
+  // Left:  R32 → R16(89,91,90,92) → QF(97,99) → SF(101)
+  // Right: R32 → R16(93,94,95,96) → QF(98,100) → SF(102)
+  // Display order top→bottom matches R32 pairing structure
+  const LEFT_R32  = [74,76,73,75,77,78,79,80]; // GER,BRA,RSA,NED,FRA,CIV,MEX,ENG
+  const RIGHT_R32 = [83,84,81,82,86,88,85,87]; // POR,ESP,USA,BEL,ARG,AUS,SUI,COL
 
-  // Also include ALL non-group matches as fallback
-  const allNonGroup = STATE.matches
-    .filter(m => !m.group)
-    .sort((a,b) => new Date(a.utcDate) - new Date(b.utcDate));
-
-  // DEBUG — log to console so we can see what's available
-  console.log('[Bracket] Total matches:', STATE.matches.length,
-    '| Non-group:', allNonGroup.length,
-    '| Stages:', [...new Set(allNonGroup.map(m=>m.stage))].join(','));
-  console.log('[Bracket] KO matches:', allNonGroup.map(m=>`${m.stage}:${m.homeTeam?.tla}v${m.awayTeam?.tla}(${m.status})`));
-
-  const byStage = {};
-  const byNorm = {}; // normalized stage buckets
-  allNonGroup.forEach(m => {
-    const raw = m.stage || 'UNKNOWN';
-    if(!byStage[raw]) byStage[raw] = [];
-    byStage[raw].push(m);
-    const norm = KO_STAGE_MAP[raw] || raw;
-    if(!byNorm[norm]) byNorm[norm] = [];
-    byNorm[norm].push(m);
-  });
-
-  // Helper: get matches for a stage, trying both raw and normalized names
-  function stageMatches(normKey) {
-    return byNorm[normKey] || byStage[normKey] || [];
+  // ── Get all matches from STATE indexed by stage for KO results lookup ──
+  const koMatches = STATE.matches.filter(m => !m.group && m.stage && m.stage !== 'GROUP_STAGE');
+  function findMatchByTeams(ha, aa) {
+    return koMatches.find(m => {
+      const mh = m.homeTeam?.tla||''; const ma = m.awayTeam?.tla||'';
+      return (mh===ha && ma===aa) || (mh===aa && ma===ha);
+    }) || null;
+  }
+  function findMatchByAnyTeam(tla) {
+    if(!tla) return null;
+    return koMatches.find(m => (m.homeTeam?.tla===tla || m.awayTeam?.tla===tla)) || null;
   }
 
-  // Build a slot from a KO match (shows teams + score if played)
-  function koMatchCard(m, isRight=false) {
-    if(!m) return tbdMatch('TBD', isRight);
-    const ht = m.homeTeam, at = m.awayTeam;
-    // Safe flag: only use tla direct lookup, never fuzzy match (avoids Mexico ghost)
-    const htTla = ht?.tla||'';
-    const atTla = at?.tla||'';
-    const htF = (htTla && FLAGS[htTla]) ? FLAGS[htTla] : (ht?.name ? teamFlag(ht) : '🏳️');
-    const atF = (atTla && FLAGS[atTla]) ? FLAGS[atTla] : (at?.name ? teamFlag(at) : '🏳️');
-    const htN = ht?.shortName||ht?.name||(htTla?htTla:null)||'TBD';
-    const atN = at?.shortName||at?.name||(atTla?atTla:null)||'TBD';
-    const isFin = m.status==='FINISHED';
-    const isLive = m.status==='IN_PLAY'||m.status==='PAUSED';
-    const hs = m.score?.fullTime?.home;
-    const as_ = m.score?.fullTime?.away;
-
-    // Highlight winner
-    const hWin = isFin && hs > as_;
-    const aWin = isFin && as_ > hs;
-
-    const scoreTag = (isFin||isLive)
-      ? `<div class="b-lbl" style="color:${isLive?'var(--red)':'var(--muted)'}">
-          ${isLive?'● LIVE':''} ${hs??0}–${as_??0} ${m.score?.halfTime?.home!=null?`(HT: ${m.score.halfTime.home}-${m.score.halfTime.away})`:''}
-        </div>`
-      : `<div class="b-lbl">${catTime(m.utcDate)} CAT · ${shortDate(m.utcDate)}</div>`;
-
-    const accent = isRight ? 'right-accent' : '';
-    const border = isLive ? 'style="box-shadow:0 0 0 1px var(--red)"' : '';
-
-    const hStyle = hWin ? ' style="color:var(--green);font-weight:700"' : '';
-    const aStyle = aWin ? ' style="color:var(--green);font-weight:700"' : '';
-    const htbd = htN==='TBD'?'tbd':'conf';
-    const atbd = atN==='TBD'?'tbd':'conf';
-    const rt = isRight?'right-team':'';
-
-    return `<div class="b-match ${accent}" ${border} onclick="openMatch(${m.id})" style="cursor:pointer">
-      <div class="b-team ${htbd} ${rt}"${hStyle}><span class="bf">${htF}</span><span>${htN}</span></div>
-      <div class="b-team ${atbd} ${rt}"${aStyle}><span class="bf">${atF}</span><span>${atN}</span></div>
-      ${scoreTag}
-    </div>`;
-  }
-
-  // Build R32 with scores overlaid on hardcoded pairings
-  const r32MatchData = stageMatches('R32');
-
-  function r32CardWithScore(p, idx, isRight=false) {
-    // Try to find the actual match in STATE.matches
-    const actualMatch = r32MatchData.find(m => {
-      const ha = teamAbbr(m.homeTeam)||tla(m.homeTeam);
-      const aa = teamAbbr(m.awayTeam)||tla(m.awayTeam);
-      return ha===p.ha||aa===p.aa||ha===p.aa||aa===p.ha;
-    });
-    if(actualMatch && (actualMatch.status==='FINISHED'||actualMatch.status==='IN_PLAY'||actualMatch.status==='PAUSED'||actualMatch.status==='TIMED'||actualMatch.status==='SCHEDULED')) {
-      return koMatchCard(actualMatch, isRight);
-    }
-    // Fallback: show confirmed teams without score
-    return bMatch(p.h, p.ha, p.a, p.aa, p.lbl, isRight);
-  }
-
-  // Rebuild R32 with live scores
-  lR32 = '';
-  for(let i=0;i<8;i++){
-    const p = CONFIRMED_R32?.[i];
-    if(p) lR32 += r32CardWithScore(p, i, false);
-    else lR32 += tbdMatch(`M${i+1}`);
-    if(i<7) lR32 += `<div class="b-spacer" style="height:4px"></div>`;
-  }
-  rR32 = '';
-  for(let i=8;i<16;i++){
-    const p = CONFIRMED_R32?.[i];
-    if(p) rR32 += r32CardWithScore(p, i, true);
-    else rR32 += tbdMatch(`M${i+1}`, true);
-    if(i<15) rR32 += `<div class="b-spacer" style="height:4px"></div>`;
-  }
-
-  // R16 — split into left (matches involving M1-M8 winners) and right (M9-M16 winners)
-  // Left R16 teams: MEX,ECU,BRA,JPN,GER,PAR,NED,MAR,FRA,SWE,COL,GHA,SUI,DZA,ENG,COD
-  // Right R16 teams: USA,BIH,BEL,SEN,RSA,CAN,CIV,NOR,ESP,AUT,POR,CRO,ARG,CPV,AUS,EGY
-  const LEFT_TEAMS  = new Set(['MEX','ECU','BRA','JPN','GER','PAR','NED','MAR','FRA','SWE','COL','GHA','SUI','DZA','ENG','COD']);
-  const RIGHT_TEAMS = new Set(['USA','BIH','BEL','SEN','RSA','CAN','CIV','NOR','ESP','AUT','POR','CRO','ARG','CPV','AUS','EGY']);
-
-  function isLeftMatch(m) {
-    // Use tla directly — most reliable identifier in KO match objects
-    const ha = m.homeTeam?.tla || teamAbbr(m.homeTeam) || tla(m.homeTeam) || '';
-    const aa = m.awayTeam?.tla || teamAbbr(m.awayTeam) || tla(m.awayTeam) || '';
-    // Also check by name for robustness
-    const hn = (m.homeTeam?.name||m.homeTeam?.shortName||'').toLowerCase();
-    const an = (m.awayTeam?.name||m.awayTeam?.shortName||'').toLowerCase();
-    const LEFT_NAMES = ['mexico','ecuador','brazil','japan','germany','paraguay',
-      'netherlands','morocco','france','sweden','colombia','ghana',
-      'switzerland','algeria','england','congo'];
-    const haLeft = LEFT_TEAMS.has(ha) || LEFT_NAMES.some(n=>hn.includes(n)||an.includes(n));
-    return haLeft;
-  }
-
-  const r16All = stageMatches('R16');
-  const qfAll  = stageMatches('QF');
-  const r16Debug = r16All.map(m=>`${m.homeTeam?.tla||'?'}v${m.awayTeam?.tla||'?'}(${m.status})`).join(', ');
-
-  // ── RESOLVE R16 TEAMS FROM R32 WINNERS ──
-  // football-data.org shows R16 slots as TIMED with empty team data.
-  // We compute the teams ourselves from R32 results.
-  const r32All2 = stageMatches('R32');
-
-  function getWinner(match) {
-    if(!match || match.status !== 'FINISHED') return null;
-    const hs = match.score?.fullTime?.home ?? 0;
-    const as_ = match.score?.fullTime?.away ?? 0;
-    const hpen = match.score?.penalties?.home;
-    const apen = match.score?.penalties?.away;
-    if(hs > as_) return match.homeTeam;
-    if(as_ > hs) return match.awayTeam;
-    if(hpen != null) return hpen > apen ? match.homeTeam : match.awayTeam;
+  // Resolve winner of a team pair (by tla) using actual match result
+  function resolveWinnerTla(ha, aa) {
+    const m = findMatchByTeams(ha, aa);
+    if(!m || m.status !== 'FINISHED') return null;
+    const hs = m.score?.fullTime?.home ?? 0, as_ = m.score?.fullTime?.away ?? 0;
+    const hpen = m.score?.penalties?.home, apen = m.score?.penalties?.away;
+    if(hs > as_) return m.homeTeam;
+    if(as_ > hs) return m.awayTeam;
+    if(hpen != null) return hpen > apen ? m.homeTeam : m.awayTeam;
     return null;
   }
 
-  function findR32ByPairing(idx) {
-    const p = CONFIRMED_R32?.[idx];
-    if(!p) return null;
-    return r32All2.find(m => {
-      const ha = m.homeTeam?.tla||''; const aa = m.awayTeam?.tla||'';
-      return ha===p.ha||aa===p.aa||ha===p.aa||aa===p.ha;
-    }) || null;
+  // Resolve the two teams expected in an R16 match from its R32 feeders
+  function resolveR16Teams(matchNum) {
+    const [f1, f2] = R16_FEEDERS[matchNum] || [];
+    const t1 = R32_TEAMS[f1], t2 = R32_TEAMS[f2];
+    const w1 = t1 ? resolveWinnerTla(t1.ha, t1.aa) : null;
+    const w2 = t2 ? resolveWinnerTla(t2.ha, t2.aa) : null;
+    return { home: w1, away: w2 };
   }
 
-  // R16 slot pairs: [M1 winner vs M2 winner, M3 vs M4, M5 vs M6, M7 vs M8,
-  //                  M9 vs M10, M11 vs M12, M13 vs M14, M15 vs M16]
-  const r16Pairs = [[0,1],[2,3],[4,5],[6,7],[8,9],[10,11],[12,13],[14,15]];
-  const r16Resolved = r16Pairs.map(([i1,i2]) => ({
-    home: getWinner(findR32ByPairing(i1)),
-    away: getWinner(findR32ByPairing(i2)),
-  }));
+  // Render a single bracket card given two team objects + optional live match
+  function renderCard(homeTeam, awayTeam, apiMatch, label, isRight=false) {
+    const accent = isRight ? 'right-accent' : '';
+    const rt = isRight ? 'right-team' : '';
 
-  function r16Card(slotIdx, isRight=false) {
-    const res  = r16Resolved[slotIdx];
-    // Find the API R16 match for this slot by matching expected teams
-    const homeTla = res?.home?.tla || '';
-    const awayTla = res?.away?.tla || '';
-    const apiM = r16All.find(m => {
-      const ha = m.homeTeam?.tla||''; const aa = m.awayTeam?.tla||'';
-      // Match if either team is found in the match (API may have only one team populated)
-      if(homeTla && (ha===homeTla||aa===homeTla)) return true;
-      if(awayTla && (ha===awayTla||aa===awayTla)) return true;
-      return false;
-    }) || null;
-    const accent = isRight?'right-accent':'';
-    const rt = isRight?'right-team':'';
+    const ht = homeTeam, at = awayTeam;
+    const htTla = ht?.tla||''; const atTla = at?.tla||'';
+    const htF = (htTla && FLAGS[htTla]) ? FLAGS[htTla] : (ht?.name?teamFlag(ht):'🏳️');
+    const atF = (atTla && FLAGS[atTla]) ? FLAGS[atTla] : (at?.name?teamFlag(at):'🏳️');
+    const htN = ht?.shortName||ht?.name||htTla||null;
+    const atN = at?.shortName||at?.name||atTla||null;
 
-    // Teams: prefer API data, fall back to computed winners
-    const ht = (apiM?.homeTeam?.tla || apiM?.homeTeam?.name) ? apiM.homeTeam : res?.home;
-    const at = (apiM?.awayTeam?.tla || apiM?.awayTeam?.name) ? apiM.awayTeam : res?.away;
-
-    const htTla=ht?.tla||''; const atTla=at?.tla||'';
-    const htF=(htTla&&FLAGS[htTla])?FLAGS[htTla]:(ht?.name?teamFlag(ht):'🏳️');
-    const atF=(atTla&&FLAGS[atTla])?FLAGS[atTla]:(at?.name?teamFlag(at):'🏳️');
-    const htN=ht?.shortName||ht?.name||htTla||null;
-    const atN=at?.shortName||at?.name||atTla||null;
-
-    const isFin=apiM?.status==='FINISHED';
-    const isLive=apiM?.status==='IN_PLAY'||apiM?.status==='PAUSED';
-    const hs=apiM?.score?.fullTime?.home;
-    const as_=apiM?.score?.fullTime?.away;
-    const hpen=apiM?.score?.penalties?.home;
-    const apen=apiM?.score?.penalties?.away;
+    const isFin  = apiMatch?.status==='FINISHED';
+    const isLive = apiMatch?.status==='IN_PLAY'||apiMatch?.status==='PAUSED';
+    const hs=apiMatch?.score?.fullTime?.home, as_=apiMatch?.score?.fullTime?.away;
+    const hpen=apiMatch?.score?.penalties?.home, apen=apiMatch?.score?.penalties?.away;
     const hWin=isFin&&(hs>as_||(hs===as_&&hpen>apen));
     const aWin=isFin&&(as_>hs||(as_===hs&&apen>hpen));
-
     const hS=hWin?' style="color:var(--green);font-weight:700"':'';
     const aS=aWin?' style="color:var(--green);font-weight:700"':'';
 
     let lbl;
     if(isFin||isLive){
       const pen=(hpen!=null&&apen!=null)?` (P:${hpen}–${apen})`:'';
-      const ht_=apiM?.score?.halfTime?.home;
-      lbl=`<div class="b-lbl" style="color:${isLive?'var(--red)':'var(--text2)'}">${isLive?'● ':''}${hs??0}–${as_??0}${pen}${ht_!=null?` HT:${ht_}-${apiM.score.halfTime.away}`:''}</div>`;
-    } else if(apiM) {
-      lbl=`<div class="b-lbl">${catTime(apiM.utcDate)} · ${shortDate(apiM.utcDate)}</div>`;
+      const ht_=apiMatch?.score?.halfTime?.home;
+      lbl=`<div class="b-lbl" style="color:${isLive?'var(--red)':'var(--text2)'}">${isLive?'● ':''}${hs??0}–${as_??0}${pen}${ht_!=null?` HT:${ht_}-${apiMatch.score.halfTime.away}`:''}</div>`;
+    } else if(apiMatch) {
+      lbl=`<div class="b-lbl">${catTime(apiMatch.utcDate)} · ${shortDate(apiMatch.utcDate)}</div>`;
     } else {
-      lbl=`<div class="b-lbl" style="color:var(--text3)">Awaiting draw</div>`;
+      lbl=`<div class="b-lbl" style="color:var(--text3)">${label||'Awaiting result'}</div>`;
     }
 
     const brd=isLive?' style="box-shadow:0 0 0 1px var(--red)"':'';
-    const clk=apiM?.id?`onclick="openMatch(${apiM.id})" style="cursor:pointer"`:'';
+    const clk=apiMatch?.id?`onclick="openMatch(${apiMatch.id})" style="cursor:pointer"`:'';
 
     const hSlot=htN?`<div class="b-team conf ${rt}"${hS}><span class="bf">${htF}</span><span>${htN}</span></div>`
                    :`<div class="b-team tbd ${rt}">TBD</div>`;
@@ -1535,47 +1352,73 @@ function renderBracket(groups){
     return `<div class="b-match ${accent}"${brd} ${clk}>${hSlot}${aSlot}${lbl}</div>`;
   }
 
-  let lR16='', rR16='';
-  for(let i=0;i<4;i++){
-    lR16 += r16Card(i, false);
-    if(i<3) lR16 += `<div class="b-spacer" style="height:${S*0.9}px"></div>`;
+  // ── R32 cards (with live scores from API) ──
+  function r32Card(matchNum, isRight=false) {
+    const t = R32_TEAMS[matchNum];
+    if(!t) return renderCard(null,null,null,'TBD',isRight);
+    const apiMatch = findMatchByTeams(t.ha, t.aa);
+    const home = apiMatch?.homeTeam?.tla ? apiMatch.homeTeam : {name:t.h, tla:t.ha};
+    const away = apiMatch?.awayTeam?.tla ? apiMatch.awayTeam : {name:t.a, tla:t.aa};
+    return renderCard(home, away, apiMatch, `M${matchNum}`, isRight);
   }
-  for(let i=4;i<8;i++){
-    rR16 += r16Card(i, true);
-    if(i<7) rR16 += `<div class="b-spacer" style="height:${S*0.9}px"></div>`;
+
+  // ── R16 cards ──
+  // API confirmed R16 teams (from debug: CANvMAR, PARvFRA, BRAvNOR, MEXvENG, USAvBEL etc.)
+  // We use the actual LAST_16 match from API directly — teams are populated now.
+  // For slots where API team is empty (?), fall back to computed winner from R32.
+  function r16Card(matchNum, isRight=false) {
+    // Find the LAST_16 match for this matchNum by checking which API R16 match
+    // contains teams from this slot's two R32 feeder matches
+    const resolved = resolveR16Teams(matchNum);
+
+    // First try: find by matching either resolved team in LAST_16 matches
+    let apiMatch = koMatches.find(m => {
+      if(m.stage !== 'LAST_16' && m.stage !== 'ROUND_OF_16') return false;
+      const mh=m.homeTeam?.tla||'', ma=m.awayTeam?.tla||'';
+      if(!mh && !ma) return false;
+      return (resolved.home?.tla && (mh===resolved.home.tla || ma===resolved.home.tla)) ||
+             (resolved.away?.tla && (mh===resolved.away.tla || ma===resolved.away.tla));
+    }) || null;
+
+    // Use API teams if available (they may be more accurate than computed)
+    const apiHasTla = apiMatch?.homeTeam?.tla && apiMatch?.awayTeam?.tla;
+    const home = apiHasTla ? apiMatch.homeTeam : resolved.home;
+    const away = apiHasTla ? apiMatch.awayTeam : resolved.away;
+
+    return renderCard(home, away, apiMatch, `R16 · M${matchNum}`, isRight);
   }
 
-  // QF — show with dates when available
-  let lQF='', rQF='';
-  [0,1].forEach(i=>{
-    const m = qfAll[i];
-    lQF += m ? koMatchCard(m, false) : tbdMatch(`QF ${i+1}`);
-    if(i===0) lQF += `<div class="b-spacer" style="height:${S*2.8}px"></div>`;
-  });
-  [0,1].forEach(i=>{
-    const m = qfAll[i+2];
-    rQF += m ? koMatchCard(m, true) : tbdMatch(`QF ${i+3}`, true);
-    if(i===0) rQF += `<div class="b-spacer" style="height:${S*2.8}px"></div>`;
-  });
+  // ── QF cards (resolve from R16 winners — usually empty this early) ──
+  function qfCard(matchNum, isRight=false) {
+    const [f1,f2] = QF_FEEDERS[matchNum]||[];
+    const r1 = resolveR16Teams(f1), r2 = resolveR16Teams(f2);
+    // Need R16 match results to know winner; check if R16 matches finished
+    function r16Winner(mn) {
+      const res = resolveR16Teams(mn);
+      const apiM = koMatches.find(m=>{
+        if(m.stage!=='LAST_16'&&m.stage!=='ROUND_OF_16') return false;
+        const mh=m.homeTeam?.tla||'',ma=m.awayTeam?.tla||'';
+        return (res.home?.tla&&(mh===res.home.tla||ma===res.home.tla))||(res.away?.tla&&(mh===res.away.tla||ma===res.away.tla));
+      });
+      if(!apiM||apiM.status!=='FINISHED') return null;
+      const hs=apiM.score?.fullTime?.home??0, as_=apiM.score?.fullTime?.away??0;
+      if(hs>as_) return apiM.homeTeam;
+      if(as_>hs) return apiM.awayTeam;
+      return null;
+    }
+    const home = r16Winner(f1), away = r16Winner(f2);
+    let apiMatch = null;
+    if(home?.tla||away?.tla){
+      apiMatch = koMatches.find(m=>{
+        if(m.stage!=='QUARTER_FINALS'&&m.stage!=='QUARTER_FINAL') return false;
+        const mh=m.homeTeam?.tla||'',ma=m.awayTeam?.tla||'';
+        return (home?.tla&&(mh===home.tla||ma===home.tla))||(away?.tla&&(mh===away.tla||ma===away.tla));
+      })||null;
+    }
+    return renderCard(home, away, apiMatch, `QF · M${matchNum}`, isRight);
+  }
 
-  // SF — first 2 matches chronologically go left/right
-  const sfAll = stageMatches('SF').sort((a,b)=>new Date(a.utcDate)-new Date(b.utcDate));
-  const lSF = sfAll[0] ? koMatchCard(sfAll[0], false) : tbdMatch('SF 1');
-  const rSF = sfAll[1] ? koMatchCard(sfAll[1], true)  : tbdMatch('SF 2', true);
-
-  // Final + 3rd
-  const finalData = stageMatches('FINAL')[0];
-  const thirdData = stageMatches('THIRD')[0];
-  const finalCard = finalData
-    ? koMatchCard(finalData, false)
-    : `<div class="b-match gold-card"><div class="b-team tbd">Winner SF 1</div><div class="b-team tbd">Winner SF 2</div><div class="b-lbl">🏆 Final · Jul 19</div></div>`;
-  const bronzeCard = thirdData
-    ? koMatchCard(thirdData, false)
-    : `<div class="b-match"><div class="b-team tbd">Loser SF 1</div><div class="b-team tbd">Loser SF 2</div><div class="b-lbl">Bronze · Jul 18</div></div>`;
-
-  // S already declared at top of function
-
-  // Group mini-cards for bracket sides
+  // ── Group mini-cards ──
   function grpCard(letter){
     const table=groups[letter]||[];
     const sorted=[...table].sort((a,b)=>b.points-a.points);
@@ -1590,9 +1433,7 @@ function renderBracket(groups){
         <span class="grp-pos-num">${pos+1}</span>
         <span class="gf">${fl}</span>
         <span class="grp-tname" style="${isThirdQual?'color:var(--green)':''}">${nm}</span>
-        <span class="grp-pts" style="${isThirdQual?'color:var(--green)':''}">
-          ${row.points}pt${isThirdQual?' ✓':''}
-        </span>
+        <span class="grp-pts" style="${isThirdQual?'color:var(--green)':''}">${row.points}pt${isThirdQual?' ✓':''}</span>
       </div>`;
     }).join('');
     return`<div class="grp-card"><div class="grp-card-lbl">Group ${letter}${groupsDone[letter]?' ✓':''}</div>${rows}</div>`;
@@ -1604,13 +1445,44 @@ function renderBracket(groups){
   leftGrps.forEach((l,i)=>{lGrpHtml+=grpCard(l);if(i<5)lGrpHtml+=`<div class="grp-spacer" style="height:${S*0.45}px"></div>`;});
   rightGrps.forEach((l,i)=>{rGrpHtml+=grpCard(l);if(i<5)rGrpHtml+=`<div class="grp-spacer" style="height:${S*0.45}px"></div>`;});
 
-  const stageDebug = Object.keys(byStage).length
-    ? `<br><span style="font-size:10px;color:var(--text3)">API stages: ${Object.entries(byStage).map(([k,v])=>`${k}(${v.length})`).join(', ')} | R16: ${r16Debug||'none'}</span>`
-    : '<br><span style="font-size:10px;color:var(--red)">⚠ No KO matches found in API yet</span>';
+  // ── Build R32 columns ──
+  let lR32='', rR32='';
+  LEFT_R32.forEach((mn,i)=>{ lR32 += r32Card(mn,false); if(i<7) lR32 += `<div class="b-spacer" style="height:4px"></div>`; });
+  RIGHT_R32.forEach((mn,i)=>{ rR32 += r32Card(mn,true); if(i<7) rR32 += `<div class="b-spacer" style="height:4px"></div>`; });
+
+  // ── Build R16 columns — order must match LEFT_R32 pairing structure ──
+  // Pairs: (M79,M76)->89? NO. Use R16_FEEDERS to find which R16 matches use LEFT_R32 teams.
+  // Confirmed bracket split from FIFA official structure:
+  // Left R16: M89(W74,W77), M90(W73,W75), M91(W76,W78), M92(W79,W80)
+  // Right R16: M93(W83,W84), M94(W81,W82), M95(W86,W88), M96(W85,W87)
+  const leftR16Nums  = [90,89,91,92]; // top→bottom: CAN/MAR, PAR/FRA, BRA/NOR, MEX/ENG
+  const rightR16Nums = [93,94,95,96]; // top→bottom: POR/ESP, USA/BEL, ARG/AUS, SUI/COL
+
+  let lR16='', rR16='';
+  leftR16Nums.forEach((mn,i)=>{ lR16+=r16Card(mn,false); if(i<leftR16Nums.length-1) lR16+=`<div class="b-spacer" style="height:${S*0.9}px"></div>`; });
+  rightR16Nums.forEach((mn,i)=>{ rR16+=r16Card(mn,true); if(i<rightR16Nums.length-1) rR16+=`<div class="b-spacer" style="height:${S*0.9}px"></div>`; });
+
+  // ── QF columns ──
+  // QF bracket: M97=W89vW90(left), M99=W91vW92(left), M98=W93vW94(right), M100=W95vW96(right)
+  const leftQFNums  = [97,99];
+  const rightQFNums = [98,100];
+
+  let lQF='', rQF='';
+  leftQFNums.forEach((mn,i)=>{ lQF+=qfCard(mn,false); if(i===0) lQF+=`<div class="b-spacer" style="height:${S*2.8}px"></div>`; });
+  rightQFNums.forEach((mn,i)=>{ rQF+=qfCard(mn,true); if(i===0) rQF+=`<div class="b-spacer" style="height:${S*2.8}px"></div>`; });
+
+  const lSF = tbdMatchSimple('SF 1 · M101');
+  const rSF = tbdMatchSimple('SF 2 · M102', true);
+  function tbdMatchSimple(lbl, isRight=false){
+    return `<div class="b-match ${isRight?'right-accent':''}"><div class="b-team tbd ${isRight?'right-team':''}">TBD</div><div class="b-team tbd ${isRight?'right-team':''}">TBD</div><div class="b-lbl">${lbl}</div></div>`;
+  }
+
+  const finalCard = `<div class="b-match gold-card"><div class="b-team tbd">Winner SF 1</div><div class="b-team tbd">Winner SF 2</div><div class="b-lbl">🏆 Final · Jul 19</div></div>`;
+  const bronzeCard = `<div class="b-match"><div class="b-team tbd">Loser SF 1</div><div class="b-team tbd">Loser SF 2</div><div class="b-lbl">Bronze · Jul 18</div></div>`;
 
   const statusMsg = allGroupsDone
-    ? `<strong style="color:var(--green)">Group stage complete</strong> — All 32 teams confirmed. Click any match to view stats.${stageDebug}`
-    : `<strong style="color:var(--gold)">Group stage in progress</strong> — Confirmed qualifiers show flag & name.${stageDebug}`;
+    ? `<strong style="color:var(--green)">Group stage complete</strong> — Official FIFA bracket structure applied. Click any match to view stats.`
+    : `<strong style="color:var(--gold)">Group stage in progress</strong> — Confirmed qualifiers show flag & name.`;
 
   el.innerHTML=`
     <div class="bracket-note">${statusMsg}</div>
@@ -1638,6 +1510,7 @@ function renderBracket(groups){
       <div class="b-col" style="min-width:108px;padding-top:28px">${rGrpHtml}</div>
     </div></div>`;
 }
+
 
 /* ════════ WIKI PHOTO ════════ */
 async function wikiPhoto(name){
